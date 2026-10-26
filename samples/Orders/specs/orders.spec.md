@@ -25,7 +25,7 @@ the system shall move it to state Cancelled.
 - AC-1: Given a Pending order, when it is cancelled, then its state is Cancelled.
 - AC-2: Given a Shipped order, when it is cancelled, then the request is rejected.
 
-## ORD-003: Aplicar cupón de descuento
+## ORD-003: Aplicar un cupón de descuento
 Status: approved
 
 When a valid coupon is applied to a Pending order,
