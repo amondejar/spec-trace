@@ -14,7 +14,7 @@ When the customer submits a cart with at least one line,
 the system shall create an order in state Pending with the same lines.
 
 - AC-1: Given a cart with 2 lines, when it is submitted, then an order with 2 lines in state Pending is created.
-- AC-2: Given an empty cart, when it is submitted, then the request is rejected with an error.
+- AC-2: Given an empty cart, when it is submitted, then the request is rejected with an error message.
 
 ## ORD-002: Cancelar pedido
 Status: approved
