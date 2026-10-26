@@ -1,0 +1,91 @@
+name: Release
+
+# Publica SpecTrace, SpecTrace.Abstractions y SpecTrace.Tool en nuget.org con Trusted Publishing (OIDC):
+# no hay ninguna clave de API guardada; NuGet/login cambia el token de GitHub por una clave temporal (1 hora).
+#
+# Se lanza al subir una etiqueta v* (git tag -a v0.5 -m "..." && git push origin v0.5) o a mano desde
+# Actions → Release → Run workflow, eligiendo la etiqueta en "Use workflow from" (sirve para publicar v0.4,
+# que ya existía antes de este workflow).
+#
+# En la política de nuget.org: Repository Owner = amondejar, Repository = spec-trace, Workflow File = release.yml.
+# Necesita el secreto NUGET_USER con tu nombre de usuario de nuget.org (el de tu perfil, no el correo).
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write   # crear la release de GitHub con los .nupkg
+  id-token: write   # token OIDC para Trusted Publishing
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Comprobar que se publica desde una etiqueta
+        run: |
+          if [ "${GITHUB_REF_TYPE}" != "tag" ]; then
+            echo "::error::Lanza este workflow desde una etiqueta v* (en 'Use workflow from' elige la etiqueta, no la rama)."
+            exit 1
+          fi
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+
+      - name: Comprobar que la etiqueta coincide con la versión del paquete
+        id: version
+        run: |
+          version=$(grep -oP '(?<=<Version>)[^<]+' Directory.Build.props)
+          tag="${GITHUB_REF_NAME#v}"
+          echo "Versión de los paquetes: $version · etiqueta: $GITHUB_REF_NAME"
+          case "$version" in
+            "$tag"|"$tag".*|"$tag"-*) ;;
+            *) echo "::error::La etiqueta $GITHUB_REF_NAME no corresponde a la versión $version de Directory.Build.props."; exit 1 ;;
+          esac
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Compilar y probar
+        run: |
+          dotnet restore SpecTrace.sln
+          dotnet build SpecTrace.sln -c Release --no-restore
+          dotnet test tests/SpecTrace.Tests -c Release --no-build
+
+      - name: Empaquetar
+        run: |
+          dotnet pack src/SpecTrace.Abstractions -c Release --no-build -o artifacts
+          dotnet pack src/SpecTrace.Package -c Release -o artifacts
+          dotnet pack src/SpecTrace.Tool -c Release --no-build -o artifacts
+          ls -l artifacts
+
+      - name: NuGet login (OIDC → clave temporal)
+        uses: NuGet/login@v1
+        id: login
+        with:
+          user: ${{ secrets.NUGET_USER }}
+
+      - name: Publicar en nuget.org
+        run: |
+          # Primero los atributos, de los que depende el paquete SpecTrace.
+          for p in SpecTrace.Abstractions SpecTrace SpecTrace.Tool; do
+            dotnet nuget push "artifacts/$p.${{ steps.version.outputs.version }}.nupkg" \
+              --api-key "${{ steps.login.outputs.NUGET_API_KEY }}" \
+              --source https://api.nuget.org/v3/index.json \
+              --skip-duplicate
+          done
+
+      - name: Release de GitHub con los paquetes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" artifacts/*.nupkg --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" artifacts/*.nupkg --verify-tag --prerelease \
+              --title "SpecTrace $GITHUB_REF_NAME" --notes "Paquetes ${{ steps.version.outputs.version }}. Cambios en CHANGELOG.md."
+          fi
