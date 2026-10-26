@@ -1,0 +1,23 @@
+<Project>
+
+  <!--
+    Valores por defecto. Se pueden sobrescribir en el .csproj o en Directory.Build.props:
+      SpecTraceRoot       carpeta que contiene spectrace.json (se busca hacia arriba desde el proyecto)
+      SpecTraceSpecsDir   carpeta con los *.spec.md (por defecto $(SpecTraceRoot)specs/)
+      SpecTraceNamespace  namespace del catálogo generado (por defecto $(RootNamespace).Specs)
+      SpecTraceRole       Implementation | Tests (por defecto se deduce de IsTestProject)
+  -->
+  <PropertyGroup>
+    <_SpecTraceMarkerDir>$([MSBuild]::GetDirectoryNameOfFileAbove($(MSBuildProjectDirectory), spectrace.json))</_SpecTraceMarkerDir>
+    <SpecTraceRoot Condition="'$(SpecTraceRoot)' == '' and '$(_SpecTraceMarkerDir)' != ''">$(_SpecTraceMarkerDir)/</SpecTraceRoot>
+    <SpecTraceRoot Condition="'$(SpecTraceRoot)' == ''">$(MSBuildProjectDirectory)/</SpecTraceRoot>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <CompilerVisibleProperty Include="RootNamespace" />
+    <CompilerVisibleProperty Include="IsTestProject" />
+    <CompilerVisibleProperty Include="SpecTraceNamespace" />
+    <CompilerVisibleProperty Include="SpecTraceRole" />
+  </ItemGroup>
+
+</Project>

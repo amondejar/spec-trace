@@ -1,0 +1,18 @@
+<Project>
+
+  <PropertyGroup>
+    <Version>0.4.0-preview.1</Version>
+    <Authors>SpecTrace contributors</Authors>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/amondejar/spec-trace</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/amondejar/spec-trace</RepositoryUrl>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <Deterministic>true</Deterministic>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(IsPackable)' != 'false'">
+    <None Include="$(MSBuildThisFileDirectory)README.md" Pack="true" PackagePath="/" Visible="false" />
+  </ItemGroup>
+
+</Project>

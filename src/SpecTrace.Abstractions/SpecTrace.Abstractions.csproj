@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <RootNamespace>SpecTrace</RootNamespace>
+    <PackageId>SpecTrace.Abstractions</PackageId>
+    <Description>Atributos [Implements] y [Verifies] para trazar requisitos de specs SDD hasta el código y los tests.</Description>
+  </PropertyGroup>
+
+</Project>

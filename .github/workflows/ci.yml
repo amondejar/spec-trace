@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+
+      - name: Restaurar
+        run: dotnet restore SpecTrace.sln
+
+      - name: Compilar
+        run: dotnet build SpecTrace.sln -c Release --no-restore
+
+      - name: Tests
+        run: dotnet test tests/SpecTrace.Tests -c Release --no-build --logger "trx;LogFileName=results.trx"
+
+      - name: Empaquetar
+        run: |
+          dotnet pack src/SpecTrace.Abstractions -c Release --no-build -o artifacts
+          dotnet pack src/SpecTrace.Package -c Release -o artifacts
+          dotnet pack src/SpecTrace.Tool -c Release --no-build -o artifacts
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packages
+          path: artifacts/*.nupkg
+
+  # La propia Action, probada contra la muestra con la herramienta recién empaquetada.
+  sample-report:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: packages
+          path: artifacts
+
+      - name: Informe de la muestra
+        id: spectrace
+        uses: ./
+        with:
+          root: samples/Orders
+          tool-source: ${{ github.workspace }}/artifacts
+          # La muestra tiene huecos a propósito (ORD-003 y ORD-002 AC-2): no debe romper el CI.
+          fail-on-gaps: "false"
+
+      - name: Comprobar que la muestra sigue teniendo sus 2 huecos y su cambio sin revisar
+        run: |
+          test "${{ steps.spectrace.outputs.gaps }}" = "2"
+          test "${{ steps.spectrace.outputs.drift }}" = "1"

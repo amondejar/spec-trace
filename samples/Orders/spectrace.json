@@ -1,0 +1,5 @@
+{
+  "$schema": "https://raw.githubusercontent.com/amondejar/spec-trace/main/schema/spectrace.schema.json",
+  "specs": "specs",
+  "sources": ["src", "tests"]
+}

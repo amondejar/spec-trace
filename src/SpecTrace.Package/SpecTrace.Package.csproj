@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Paquete NuGet "SpecTrace". No contiene código propio: reúne en analyzers/dotnet/cs
+    el analizador + generador (SpecTrace.Analyzers.dll) y los code fixes (SpecTrace.CodeFixes.dll),
+    añade los props/targets de MSBuild y declara la dependencia de SpecTrace.Abstractions.
+  -->
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <IncludeSymbols>false</IncludeSymbols>
+    <NoWarn>$(NoWarn);NU5128</NoWarn>
+
+    <PackageId>SpecTrace</PackageId>
+    <Description>Trazabilidad Spec-Driven Development para .NET: catálogo tipado de requisitos generado desde specs Markdown, diagnósticos de compilación para requisitos sin implementar o sin test, y code fixes en el IDE.</Description>
+    <PackageTags>sdd;spec-driven-development;roslyn;analyzer;source-generator;codefix;traceability;ai-agents</PackageTags>
+    <DevelopmentDependency>false</DevelopmentDependency>
+
+    <TargetsForTfmSpecificContentInPackage>$(TargetsForTfmSpecificContentInPackage);_SpecTraceAddAnalyzers</TargetsForTfmSpecificContentInPackage>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Dependencia real del paquete: los atributos. -->
+    <ProjectReference Include="..\SpecTrace.Abstractions\SpecTrace.Abstractions.csproj" />
+    <!-- Solo se copian para meterlos en analyzers/; no son dependencias del paquete. -->
+    <ProjectReference Include="..\SpecTrace.Analyzers\SpecTrace.Analyzers.csproj" PrivateAssets="all" />
+    <ProjectReference Include="..\SpecTrace.CodeFixes\SpecTrace.CodeFixes.csproj" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\SpecTrace.Analyzers\build\SpecTrace.props" Pack="true" PackagePath="build;buildTransitive" Visible="false" />
+    <None Include="..\SpecTrace.Analyzers\build\SpecTrace.targets" Pack="true" PackagePath="build;buildTransitive" Visible="false" />
+  </ItemGroup>
+
+  <Target Name="_SpecTraceAddAnalyzers">
+    <ItemGroup>
+      <TfmSpecificPackageFile Include="$(OutputPath)SpecTrace.Analyzers.dll" PackagePath="analyzers/dotnet/cs" />
+      <TfmSpecificPackageFile Include="$(OutputPath)SpecTrace.CodeFixes.dll" PackagePath="analyzers/dotnet/cs" />
+    </ItemGroup>
+  </Target>
+
+</Project>

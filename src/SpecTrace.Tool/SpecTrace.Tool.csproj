@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <RollForward>Major</RollForward>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>SpecTrace.Tool</RootNamespace>
+
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>spectrace</ToolCommandName>
+    <PackageId>SpecTrace.Tool</PackageId>
+    <Description>CLI de SpecTrace: informe de trazabilidad, servidor MCP para agentes de IA, importación de Spec Kit y OpenSpec, y esqueletos de tests xUnit.</Description>
+    <PackageTags>sdd;spec-driven-development;mcp;model-context-protocol;spec-kit;openspec;traceability;ai-agents</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Templates\*.md" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.8.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Parser de specs y plantilla de tests compartidos con el analizador. -->
+    <ProjectReference Include="..\SpecTrace.Analyzers\SpecTrace.Analyzers.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="SpecTrace.Tests" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,6 @@
+# Severidades de SpecTrace para este repo. .globalconfig se aplica también a los
+# diagnósticos que se reportan sobre los ficheros .spec.md (no son ficheros C#).
+is_global = true
+
+dotnet_diagnostic.ST0003.severity = warning
+dotnet_diagnostic.ST0005.severity = warning

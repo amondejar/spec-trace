@@ -1,0 +1,123 @@
+name: SpecTrace report
+description: >
+  Publica la trazabilidad spec → código → test de SpecTrace en cada pull request:
+  anotaciones en los ficheros, resumen del job y un comentario con la matriz completa
+  que se actualiza en cada push.
+author: SpecTrace contributors
+branding:
+  icon: check-square
+  color: blue
+
+inputs:
+  root:
+    description: Carpeta que contiene spectrace.json (relativa a la raíz del repositorio).
+    default: "."
+  fail-on-gaps:
+    description: Si es 'true', el job falla cuando hay requisitos activos sin implementar, sin tests o con criterios sin test.
+    default: "false"
+  fail-on-drift:
+    description: Si es 'true', el job falla cuando el texto de un requisito cambió después de revisarse (spectrace.lock) y su código o sus tests siguen sin revisar.
+    default: "false"
+  comment:
+    description: Si es 'true' y el evento es una pull request, publica o actualiza un comentario con el informe.
+    default: "true"
+  tool-version:
+    description: Versión de SpecTrace.Tool a instalar. Vacío = la última publicada (incluidas preview).
+    default: ""
+  tool-source:
+    description: Fuente NuGet adicional para instalar la herramienta (por ejemplo una carpeta con un .nupkg local).
+    default: ""
+  dotnet-version:
+    description: SDK de .NET con el que ejecutar la herramienta.
+    default: "8.0.x"
+  github-token:
+    description: Token para publicar el comentario. Necesita permiso pull-requests:write.
+    default: ${{ github.token }}
+
+outputs:
+  gaps:
+    description: Número de requisitos con huecos (sin implementar, sin tests o con criterios sin test).
+    value: ${{ steps.report.outputs.gaps }}
+  drift:
+    description: Número de requisitos cuyo texto cambió después de la última revisión y tienen código o tests por revisar.
+    value: ${{ steps.report.outputs.drift }}
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ inputs.dotnet-version }}
+
+    - name: Instalar SpecTrace.Tool
+      shell: bash
+      env:
+        TOOL_VERSION: ${{ inputs.tool-version }}
+        TOOL_SOURCE: ${{ inputs.tool-source }}
+      run: |
+        args=(tool install --global SpecTrace.Tool)
+        if [ -n "$TOOL_VERSION" ]; then args+=(--version "$TOOL_VERSION"); else args+=(--prerelease); fi
+        if [ -n "$TOOL_SOURCE" ]; then args+=(--add-source "$TOOL_SOURCE"); fi
+        dotnet "${args[@]}"
+        echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
+
+    - name: Generar informe
+      id: report
+      shell: bash
+      env:
+        ROOT: ${{ inputs.root }}
+        LINK_BASE: ${{ github.server_url }}/${{ github.repository }}/blob/${{ github.event.pull_request.head.sha || github.sha }}/
+      run: |
+        root="${ROOT%/}"
+        if [ "$root" = "." ]; then prefix=""; else prefix="$root/"; fi
+
+        # Anotaciones en los ficheros de la PR.
+        spectrace report --root "$root" --format github
+
+        # Informe en Markdown con enlaces absolutos, para el resumen del job y el comentario.
+        spectrace report --root "$root" --link-base "${LINK_BASE}${prefix}" --out "$RUNNER_TEMP/spectrace-report.md" > /dev/null
+        cat "$RUNNER_TEMP/spectrace-report.md" >> "$GITHUB_STEP_SUMMARY"
+
+        gaps=$(spectrace report --root "$root" --format json | jq '[.requirements[] | select(.gap)] | length')
+        echo "gaps=$gaps" >> "$GITHUB_OUTPUT"
+        echo "Requisitos con huecos: $gaps"
+
+        drift=$(spectrace report --root "$root" --format json | jq '[.requirements[] | select(.drift.pending)] | length')
+        echo "drift=$drift" >> "$GITHUB_OUTPUT"
+        echo "Requisitos con cambios en la spec sin revisar: $drift"
+
+    - name: Comentar en la PR
+      if: inputs.comment == 'true' && github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      env:
+        REPORT_PATH: ${{ runner.temp }}/spectrace-report.md
+        ROOT: ${{ inputs.root }}
+      with:
+        github-token: ${{ inputs.github-token }}
+        script: |
+          const fs = require('fs');
+          const marker = `<!-- spectrace-report:${process.env.ROOT} -->`;
+          const body = `${marker}\n${fs.readFileSync(process.env.REPORT_PATH, 'utf8')}`;
+          const { owner, repo } = context.repo;
+          const issue_number = context.payload.pull_request.number;
+          const comments = await github.paginate(github.rest.issues.listComments, { owner, repo, issue_number, per_page: 100 });
+          const existing = comments.find(c => c.body && c.body.startsWith(marker));
+          if (existing) {
+            await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+          } else {
+            await github.rest.issues.createComment({ owner, repo, issue_number, body });
+          }
+
+    - name: Fallar si hay huecos
+      if: inputs.fail-on-gaps == 'true' && steps.report.outputs.gaps != '0'
+      shell: bash
+      run: |
+        echo "::error title=SpecTrace::Hay ${{ steps.report.outputs.gaps }} requisito(s) con huecos de trazabilidad. Revisa el informe."
+        exit 1
+
+    - name: Fallar si hay cambios en la spec sin revisar
+      if: inputs.fail-on-drift == 'true' && steps.report.outputs.drift != '0'
+      shell: bash
+      run: |
+        echo "::error title=SpecTrace::Hay ${{ steps.report.outputs.drift }} requisito(s) cuyo texto cambió después de revisarse. Revisa su código y sus tests y ejecuta dotnet spectrace lock --requirement <ID>."
+        exit 1

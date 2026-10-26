@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="4.8.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\SpecTrace.Abstractions\SpecTrace.Abstractions.csproj" />
+    <ProjectReference Include="..\..\src\SpecTrace.Analyzers\SpecTrace.Analyzers.csproj" />
+    <ProjectReference Include="..\..\src\SpecTrace.CodeFixes\SpecTrace.CodeFixes.csproj" />
+    <ProjectReference Include="..\..\src\SpecTrace.Tool\SpecTrace.Tool.csproj" />
+  </ItemGroup>
+
+</Project>

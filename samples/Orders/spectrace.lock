@@ -1,0 +1,6 @@
+# spectrace.lock: versión de cada requisito revisada contra su código y sus tests.
+# La genera `dotnet spectrace lock`. Si el texto de un requisito cambia, el build avisa con ST0010/ST0011
+# hasta que alguien revise el código y los tests y vuelva a ejecutar `dotnet spectrace lock --requirement <ID>`.
+ORD-001 statement:4e8182cacfe8 AC-1:a3575ac1042c AC-2:cb5bd7f07a24
+ORD-002 statement:a3a499f2b49f AC-1:6a390932a209 AC-2:f5db4ab6a79c
+ORD-003 statement:2f1bbe7cafea AC-1:cbdeeb98e8a4 AC-2:b2d3847330fe

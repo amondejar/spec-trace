@@ -1,0 +1,22 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/amondejar/spec-trace/main/schema/spectrace.schema.json",
+  "title": "spectrace.json",
+  "description": "Configuración de SpecTrace. Marca la raíz del repositorio para el analizador y la CLI.",
+  "type": "object",
+  "properties": {
+    "$schema": { "type": "string" },
+    "specs": {
+      "type": "string",
+      "description": "Carpeta con los ficheros *.spec.md, relativa a este fichero.",
+      "default": "specs"
+    },
+    "sources": {
+      "type": "array",
+      "description": "Carpetas con el código y los tests que analiza la CLI (report, context, get_code...).",
+      "items": { "type": "string" },
+      "default": ["src", "tests"]
+    }
+  },
+  "additionalProperties": false
+}
