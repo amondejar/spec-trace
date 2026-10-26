@@ -12,9 +12,10 @@ using SpecTrace.Specs;
 namespace SpecTrace.Analyzers
 {
     /// <summary>
-    /// Comprueba la trazabilidad spec → código → test en cada compilación.
-    /// Proyectos de implementación: IDs válidos (ST0001/2/6) y requisitos sin implementar (ST0003).
-    /// Proyectos de test (IsTestProject=true): IDs válidos y requisitos/criterios implementados sin test (ST0004/5).
+    /// Checks spec → code → test traceability on every compilation.
+    /// Implementation projects: valid IDs (ST0001/2/6), requirements not implemented (ST0003), statement changes (ST0010).
+    /// Test projects (IsTestProject=true): valid IDs, implemented requirements/criteria without tests (ST0004/5) and
+    /// criterion changes (ST0011).
     /// </summary>
     [DiagnosticAnalyzer(LanguageNames.CSharp)]
     public sealed class SpecTraceAnalyzer : DiagnosticAnalyzer
@@ -54,7 +55,7 @@ namespace SpecTrace.Analyzers
             var texts = specFiles.ToDictionary(f => f.Path, f => f.GetText(start.CancellationToken), StringComparer.Ordinal);
             var options = SpecTraceOptions.From(start.Options.AnalyzerConfigOptionsProvider.GlobalOptions);
 
-            // spectrace.lock (opcional): versión revisada de cada requisito, para detectar cambios en la spec.
+            // spectrace.lock (optional): reviewed version of each requirement, to detect spec changes.
             var lockFile = start.Options.AdditionalFiles.FirstOrDefault(f =>
                 string.Equals(System.IO.Path.GetFileName(f.Path), SpecLock.FileName, StringComparison.OrdinalIgnoreCase));
             var specLock = lockFile == null ? null : SpecLock.Parse(lockFile.GetText(start.CancellationToken)?.ToString() ?? string.Empty);
@@ -64,7 +65,7 @@ namespace SpecTrace.Analyzers
 
             start.RegisterSymbolAction(ctx =>
             {
-                // Un test saltado ([Fact(Skip = "...")], [Ignore], ...) no cuenta como verificación.
+                // A skipped test ([Fact(Skip = "...")], [Ignore], ...) does not count as verification.
                 var skipped = IsSkipped(ctx.Symbol);
 
                 foreach (var attr in ctx.Symbol.GetAttributes())
@@ -109,7 +110,7 @@ namespace SpecTrace.Analyzers
                     if (criterion != null && requirement.FindCriterion(criterion) == null)
                     {
                         var critLocation = args is { Count: > 1 } ? args.Value[1].GetLocation() : idLocation;
-                        var known = requirement.Criteria.Count == 0 ? "ninguno" : string.Join(", ", requirement.Criteria.Select(c => c.Id));
+                        var known = requirement.Criteria.Count == 0 ? "none" : string.Join(", ", requirement.Criteria.Select(c => c.Id));
                         var props = ImmutableDictionary<string, string?>.Empty
                             .Add(DiagnosticProperties.Suggestions, string.Join(";", requirement.Criteria.Select(c => c.Id)));
                         ctx.ReportDiagnostic(Diagnostic.Create(Diagnostics.UnknownCriterion, critLocation, props, requirement.Id, criterion, known));
@@ -128,7 +129,7 @@ namespace SpecTrace.Analyzers
             {
                 Location At(string path, int line) => SpecLocation(texts, path, line);
 
-                // Los problemas de formato se reportan solo en proyectos de implementación para no duplicarlos.
+                // Format issues are only reported in implementation projects, to avoid duplicates.
                 if (!options.IsTestProject)
                 {
                     foreach (var issue in catalog.Issues)
@@ -150,7 +151,7 @@ namespace SpecTrace.Analyzers
                             req.Id, req.Title, req.Status));
                     }
 
-                    // ST0010: el enunciado cambió después de revisarse y este proyecto lo implementa.
+                    // ST0010: the statement changed after review and this project implements it.
                     if (specLock != null)
                     {
                         foreach (var req in catalog.Requirements.Where(r => r.IsEnforced && implementedHere.Contains(r.Id)))
@@ -165,7 +166,7 @@ namespace SpecTrace.Analyzers
                     return;
                 }
 
-                // Proyecto de test: lo implementado viene de los ensamblados referenciados (y del propio proyecto).
+                // Test project: what is implemented comes from the referenced assemblies (and the project itself).
                 var implementedWhere = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
                 foreach (var impl in implementations) implementedWhere[impl.Id] = impl.Symbol;
 
@@ -187,7 +188,7 @@ namespace SpecTrace.Analyzers
 
                 var verified = verifications.ToList();
 
-                // ST0011: un criterio cambió después de revisarse y este proyecto tiene tests que lo verifican.
+                // ST0011: a criterion changed after review and this project has tests verifying it.
                 if (specLock != null)
                 {
                     foreach (var req in catalog.Requirements.Where(r => r.IsEnforced))

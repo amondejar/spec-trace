@@ -6,8 +6,8 @@ using System.Text.RegularExpressions;
 namespace SpecTrace.Specs
 {
     /// <summary>
-    /// Lee specs Markdown con requisitos identificados. Sin dependencias de Roslyn: lo comparten
-    /// el analizador, el generador y la herramienta de línea de comandos.
+    /// Reads Markdown specs with identified requirements. No Roslyn dependency: shared by the analyzer,
+    /// the generator and the command-line tool.
     /// </summary>
     public static class SpecParser
     {
@@ -118,7 +118,7 @@ namespace SpecTrace.Specs
                     if (current.Criteria.Any(c => c.Id == id))
                     {
                         issues.Add(new SpecIssue(SpecIssueKind.DuplicateCriterion,
-                            $"El criterio '{id}' aparece dos veces en el requisito '{current.Id}'", filePath, i));
+                            $"Criterion '{id}' appears twice in requirement '{current.Id}'", filePath, i));
                     }
                     else
                     {
@@ -135,7 +135,7 @@ namespace SpecTrace.Specs
                     continue;
                 }
 
-                // Las citas (> ...) son notas para personas, no parte del enunciado.
+                // Blockquotes (> ...) are notes for people, not part of the statement.
                 if (line.TrimStart().StartsWith(">", StringComparison.Ordinal)) continue;
 
                 if (!current.StatementClosed)
@@ -155,7 +155,7 @@ namespace SpecTrace.Specs
             if (!SpecStatus.All.Contains(status))
             {
                 issues.Add(new SpecIssue(SpecIssueKind.UnknownStatus,
-                    $"Estado '{status}' desconocido en '{b.Id}'. Usa: {string.Join(", ", SpecStatus.All)}",
+                    $"Unknown status '{status}' in '{b.Id}'. Use one of: {string.Join(", ", SpecStatus.All)}",
                     filePath, b.StatusLine ?? b.Line));
                 status = SpecStatus.Approved;
             }
@@ -163,7 +163,7 @@ namespace SpecTrace.Specs
             if (requirements.Any(r => string.Equals(r.Id, b.Id, StringComparison.OrdinalIgnoreCase)))
             {
                 issues.Add(new SpecIssue(SpecIssueKind.DuplicateRequirement,
-                    $"El requisito '{b.Id}' está definido más de una vez en este fichero", filePath, b.Line));
+                    $"Requirement '{b.Id}' is defined more than once in this file", filePath, b.Line));
                 return;
             }
 
@@ -171,14 +171,14 @@ namespace SpecTrace.Specs
             if (statement.Length == 0 && status != SpecStatus.Deprecated)
             {
                 issues.Add(new SpecIssue(SpecIssueKind.MissingStatement,
-                    $"El requisito '{b.Id}' no tiene enunciado (se recomienda formato EARS: When/While/If ... the system shall ...)",
+                    $"Requirement '{b.Id}' has no statement (the EARS format is recommended: When/While/If ... the system shall ...)",
                     filePath, b.Line));
             }
 
             if (b.Criteria.Count == 0 && (status == SpecStatus.Approved || status == SpecStatus.Implemented))
             {
                 issues.Add(new SpecIssue(SpecIssueKind.MissingCriteria,
-                    $"El requisito '{b.Id}' está aprobado pero no tiene criterios de aceptación (- AC-1: ...)",
+                    $"Requirement '{b.Id}' is approved but has no acceptance criteria (- AC-1: ...)",
                     filePath, b.Line));
             }
 

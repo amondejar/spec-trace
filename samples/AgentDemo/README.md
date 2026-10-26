@@ -1,50 +1,51 @@
 # Demo: SpecTrace + Microsoft Agent Framework
 
-Un agente de [Microsoft Agent Framework](https://learn.microsoft.com/agent-framework/) que se conecta al servidor
-MCP de SpecTrace, consulta un requisito de `samples/Orders` y propone el código y los tests que faltan con las
-marcas `[Implements]` / `[Verifies]` correctas.
+A [Microsoft Agent Framework](https://learn.microsoft.com/agent-framework/) agent that connects to the SpecTrace MCP
+server, studies a requirement from `samples/Orders` and proposes the missing code and tests with the right
+`[Implements]` / `[Verifies]` attributes.
 
-## Ejecutar
+## Run
 
 ```bash
-# 1. Compila la CLI: la demo lanza su servidor MCP desde bin/
+# 1. Build the CLI: the demo starts its MCP server from bin/
 dotnet build src/SpecTrace.Tool
 
-# 2. Configura el modelo (cualquier endpoint compatible con la API de OpenAI)
+# 2. Configure the model (any OpenAI-compatible endpoint)
 export OPENAI_API_KEY=sk-...                    # OpenAI
-# o Claude, con el endpoint compatible de la Claude API (para pruebas, no producción):
+# or Claude, through the Claude API's OpenAI-compatible endpoint (for testing, not production):
 export OPENAI_API_KEY=sk-ant-...
 export OPENAI_BASE_URL=https://api.anthropic.com/v1/
 export OPENAI_MODEL=claude-sonnet-5-5
-# o, en local con Ollama:
+# or locally with Ollama:
 export OPENAI_BASE_URL=http://localhost:11434/v1
-export OPENAI_MODEL=qwen2.5-coder:14b           # un modelo con soporte de herramientas
+export OPENAI_MODEL=qwen2.5-coder:14b           # a model with tool support
 
-# 3. Lanza el agente sobre un requisito
+# 3. Run the agent on a requirement
 dotnet run --project samples/AgentDemo -- ORD-002
 dotnet run --project samples/AgentDemo -- ORD-003 --allow-writes
 ```
 
-| Opción | Efecto |
+| Option | Effect |
 | --- | --- |
-| `<ID>` | Requisito a trabajar (por defecto `ORD-002`). |
-| `--allow-writes` | Da al agente también `scaffold_tests` y `propose_requirement`. Sin ella solo lee (`list_requirements`, `get_requirement`, `get_code`, `get_traceability_report`). |
-| `--root <dir>` | Carpeta con `spectrace.json` (por defecto `samples/Orders`). |
+| `<ID>` | Requirement to work on (default `ORD-002`). |
+| `--allow-writes` | Also gives the agent `scaffold_tests` and `propose_requirement`. Without it the agent only reads (`list_requirements`, `get_requirement`, `get_code`, `get_traceability_report`). |
+| `--root <dir>` | Folder containing `spectrace.json` (default `samples/Orders`). |
 
-## Qué esperar
+## What to expect
 
-- **ORD-002**: el agente ve que AC-2 (cancelar un pedido enviado) no tiene test y propone uno con
+- **ORD-002**: the agent sees that AC-2 (cancelling a shipped order) has no test and proposes one with
   `[Verifies(Requirements.ORD_002, AcceptanceCriteria.ORD_002.AC_2)]`.
-- **ORD-003**: no hay implementación; lee `OrderService.cs` con `get_code`, ve que `Order.Total` es calculado y propone
-  `ApplyCoupon` con `[Implements(Requirements.ORD_003)]` encajando en esos tipos, más un test por criterio.
-  Con `--allow-writes` además crea los esqueletos en `tests/Orders.Tests/Specs`.
+- **ORD-003**: there is no implementation; it reads `OrderService.cs` with `get_code`, sees that `Order.Total` is
+  computed and proposes an `ApplyCoupon` with `[Implements(Requirements.ORD_003)]` that fits those types, plus one test
+  per criterion. With `--allow-writes` it also creates the skeletons in `tests/Orders.Tests/Specs`.
 
-Comprueba el resultado igual que con cualquier cambio: `dotnet build` (avisos ST) y `dotnet spectrace report`.
+Check the result as with any change: `dotnet build` (ST diagnostics) and `dotnet spectrace report`.
 
-## Notas
+## Notes
 
-- En Windows, `cmd` usa `set NOMBRE=valor` y PowerShell `$env:NOMBRE="valor"`. Nunca pegues la clave en un chat o un fichero versionado.
-- La demo no está en `SpecTrace.sln` y usa versiones flotantes de `Microsoft.Agents.AI` (1.x),
-  `Microsoft.Extensions.AI.OpenAI` y `ModelContextProtocol.Core` (2.x). Fíjalas al adoptarla.
-- El servidor MCP de SpecTrace implementa el handshake `initialize` (revisiones 2024-11-05 a 2025-11-25).
-  Los clientes del SDK 2.x prefieren la revisión 2026-07-28 y vuelven a `initialize` automáticamente.
+- On Windows, `cmd` uses `set NAME=value` and PowerShell `$env:NAME="value"`. Never paste the key into a chat or a
+  versioned file.
+- The demo is not part of `SpecTrace.sln` and uses floating versions of `Microsoft.Agents.AI` (1.x),
+  `Microsoft.Extensions.AI.OpenAI` and `ModelContextProtocol.Core` (2.x). Pin them when you adopt it.
+- The SpecTrace MCP server implements the `initialize` handshake (revisions 2024-11-05 to 2025-11-25).
+  SDK 2.x clients prefer revision 2026-07-28 and fall back to `initialize` automatically.

@@ -1,14 +1,13 @@
 name: Release
 
-# Publica SpecTrace, SpecTrace.Abstractions y SpecTrace.Tool en nuget.org con Trusted Publishing (OIDC):
-# no hay ninguna clave de API guardada; NuGet/login cambia el token de GitHub por una clave temporal (1 hora).
+# Publishes SpecTrace, SpecTrace.Abstractions and SpecTrace.Tool to nuget.org with Trusted Publishing (OIDC):
+# no API key is stored; NuGet/login exchanges the GitHub token for a temporary key (valid for 1 hour).
 #
-# Se lanza al subir una etiqueta v* (git tag -a v0.5 -m "..." && git push origin v0.5) o a mano desde
-# Actions → Release → Run workflow, eligiendo la etiqueta en "Use workflow from" (sirve para publicar v0.4,
-# que ya existía antes de este workflow).
+# Runs when a v* tag is pushed (git tag -a v0.5 -m "..." && git push origin v0.5), or manually from
+# Actions → Release → Run workflow, choosing the tag in "Use workflow from".
 #
-# En la política de nuget.org: Repository Owner = amondejar, Repository = spec-trace, Workflow File = release.yml.
-# Necesita el secreto NUGET_USER con tu nombre de usuario de nuget.org (el de tu perfil, no el correo).
+# nuget.org policy: Repository Owner = amondejar, Repository = spec-trace, Workflow File = release.yml.
+# Requires the NUGET_USER secret with your nuget.org user name (profile name, not your email).
 
 on:
   push:
@@ -16,8 +15,8 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write   # crear la release de GitHub con los .nupkg
-  id-token: write   # token OIDC para Trusted Publishing
+  contents: write   # create the GitHub release with the .nupkg files
+  id-token: write   # OIDC token for Trusted Publishing
 
 jobs:
   publish:
@@ -25,10 +24,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Comprobar que se publica desde una etiqueta
+      - name: Check that this runs from a tag
         run: |
           if [ "${GITHUB_REF_TYPE}" != "tag" ]; then
-            echo "::error::Lanza este workflow desde una etiqueta v* (en 'Use workflow from' elige la etiqueta, no la rama)."
+            echo "::error::Run this workflow from a v* tag (in 'Use workflow from' choose the tag, not the branch)."
             exit 1
           fi
 
@@ -38,40 +37,40 @@ jobs:
             8.0.x
             10.0.x
 
-      - name: Comprobar que la etiqueta coincide con la versión del paquete
+      - name: Check that the tag matches the package version
         id: version
         run: |
           version=$(grep -oP '(?<=<Version>)[^<]+' Directory.Build.props)
           tag="${GITHUB_REF_NAME#v}"
-          echo "Versión de los paquetes: $version · etiqueta: $GITHUB_REF_NAME"
+          echo "Package version: $version · tag: $GITHUB_REF_NAME"
           case "$version" in
             "$tag"|"$tag".*|"$tag"-*) ;;
-            *) echo "::error::La etiqueta $GITHUB_REF_NAME no corresponde a la versión $version de Directory.Build.props."; exit 1 ;;
+            *) echo "::error::Tag $GITHUB_REF_NAME does not match version $version in Directory.Build.props."; exit 1 ;;
           esac
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
-      - name: Compilar y probar
+      - name: Build and test
         run: |
           dotnet restore SpecTrace.sln
           dotnet build SpecTrace.sln -c Release --no-restore
           dotnet test tests/SpecTrace.Tests -c Release --no-build
 
-      - name: Empaquetar
+      - name: Pack
         run: |
           dotnet pack src/SpecTrace.Abstractions -c Release --no-build -o artifacts
           dotnet pack src/SpecTrace.Package -c Release -o artifacts
           dotnet pack src/SpecTrace.Tool -c Release --no-build -o artifacts
           ls -l artifacts
 
-      - name: NuGet login (OIDC → clave temporal)
+      - name: NuGet login (OIDC → temporary API key)
         uses: NuGet/login@v1
         id: login
         with:
           user: ${{ secrets.NUGET_USER }}
 
-      - name: Publicar en nuget.org
+      - name: Publish to nuget.org
         run: |
-          # Primero los atributos, de los que depende el paquete SpecTrace.
+          # The attributes first: the SpecTrace package depends on them.
           for p in SpecTrace.Abstractions SpecTrace SpecTrace.Tool; do
             dotnet nuget push "artifacts/$p.${{ steps.version.outputs.version }}.nupkg" \
               --api-key "${{ steps.login.outputs.NUGET_API_KEY }}" \
@@ -79,7 +78,7 @@ jobs:
               --skip-duplicate
           done
 
-      - name: Release de GitHub con los paquetes
+      - name: GitHub release with the packages
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -87,5 +86,5 @@ jobs:
             gh release upload "$GITHUB_REF_NAME" artifacts/*.nupkg --clobber
           else
             gh release create "$GITHUB_REF_NAME" artifacts/*.nupkg --verify-tag --prerelease \
-              --title "SpecTrace $GITHUB_REF_NAME" --notes "Paquetes ${{ steps.version.outputs.version }}. Cambios en CHANGELOG.md."
+              --title "SpecTrace $GITHUB_REF_NAME" --notes "Packages ${{ steps.version.outputs.version }}. See CHANGELOG.md for the changes."
           fi

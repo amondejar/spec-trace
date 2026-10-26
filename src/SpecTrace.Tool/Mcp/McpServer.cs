@@ -9,14 +9,14 @@ using System.Threading.Tasks;
 namespace SpecTrace.Tool.Mcp;
 
 /// <summary>
-/// Servidor Model Context Protocol mínimo sobre stdio (JSON-RPC 2.0, un mensaje por línea).
-/// Implementa el ciclo de vida con <c>initialize</c> y las capacidades de herramientas, sin dependencias externas.
-/// Los clientes que hablan la revisión 2026-07-28 preguntan primero por <c>server/discover</c>; al recibir
-/// "method not found" vuelven al handshake <c>initialize</c>, que es el que se implementa aquí.
+/// Minimal Model Context Protocol server over stdio (JSON-RPC 2.0, one message per line).
+/// Implements the <c>initialize</c> lifecycle and the tools capability, with no external dependencies.
+/// Clients speaking revision 2026-07-28 first ask for <c>server/discover</c>; on
+/// "method not found" they fall back to the <c>initialize</c> handshake, which is the one implemented here.
 /// </summary>
 public sealed class McpServer
 {
-    /// <summary>Revisiones soportadas, de la más reciente a la más antigua.</summary>
+    /// <summary>Supported revisions, newest first.</summary>
     public static readonly string[] SupportedVersions = { "2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05" };
 
     public const string ServerName = "spectrace";
@@ -27,8 +27,8 @@ public sealed class McpServer
     private const int InvalidParams = -32602;
     private const int InternalError = -32603;
 
-    // Sin escapar tildes ni símbolos (ó...): es JSON válido igual y se lee bien en logs y consola.
-    // El canal es stdio hacia un cliente MCP, no HTML, así que el modo relajado es seguro.
+    // Do not escape accents or symbols (ó...): it is still valid JSON and reads well in logs and the console.
+    // The channel is stdio to an MCP client, not HTML, so the relaxed mode is safe.
     private static readonly JsonSerializerOptions Compact = new()
     {
         WriteIndented = false,
@@ -36,8 +36,8 @@ public sealed class McpServer
     };
 
     /// <summary>
-    /// Atiende el protocolo sobre la entrada y salida estándar del proceso, en UTF-8 sin BOM sea cual sea la página de
-    /// códigos de la consola (en Windows suele ser 850 o 1252 y estropearía las tildes que envía el cliente).
+    /// Serves the protocol over the process's standard input and output, in UTF-8 without BOM regardless of the console
+    /// code page (on Windows it is usually 850 or 1252, which would garble non-ASCII text sent by the client).
     /// </summary>
     public Task RunOnStdioAsync(CancellationToken ct = default)
     {
@@ -58,7 +58,7 @@ public sealed class McpServer
 
     public string? NegotiatedVersion { get; private set; }
 
-    /// <summary>Atiende mensajes hasta que se cierra la entrada.</summary>
+    /// <summary>Serves messages until the input is closed.</summary>
     public async Task RunAsync(TextReader input, TextWriter output, CancellationToken ct = default)
     {
         while (!ct.IsCancellationRequested)
@@ -75,7 +75,7 @@ public sealed class McpServer
         }
     }
 
-    /// <summary>Procesa un mensaje JSON-RPC y devuelve la respuesta, o null si era una notificación.</summary>
+    /// <summary>Processes a JSON-RPC message and returns the response, or null if it was a notification.</summary>
     public JsonObject? Handle(string message)
     {
         JsonNode? node;
@@ -85,12 +85,12 @@ public sealed class McpServer
         }
         catch (JsonException ex)
         {
-            return Error(null, ParseError, "JSON no válido: " + ex.Message);
+            return Error(null, ParseError, "Invalid JSON: " + ex.Message);
         }
 
         if (node is not JsonObject request || request["jsonrpc"]?.GetValue<string>() != "2.0")
         {
-            return Error(null, InvalidRequest, "Se esperaba un objeto JSON-RPC 2.0 (los lotes no están soportados)");
+            return Error(null, InvalidRequest, "Expected a JSON-RPC 2.0 object (batches are not supported)");
         }
 
         var id = request["id"]?.DeepClone();
@@ -99,7 +99,7 @@ public sealed class McpServer
 
         if (method == null)
         {
-            // Respuesta a una petición del servidor: este servidor no hace peticiones, se ignora.
+            // Response to a server request: this server sends no requests, so it is ignored.
             return isNotification ? null : Error(id, InvalidRequest, "Falta 'method'");
         }
 
@@ -107,7 +107,7 @@ public sealed class McpServer
 
         if (isNotification)
         {
-            // notifications/initialized, notifications/cancelled, ...: no requieren respuesta.
+            // notifications/initialized, notifications/cancelled, ...: no response needed.
             return null;
         }
 
@@ -120,12 +120,12 @@ public sealed class McpServer
                 "ping" => Result(id, new JsonObject()),
                 "tools/list" => Result(id, new JsonObject { ["tools"] = _tools.Definitions() }),
                 "tools/call" => CallTool(id, @params),
-                _ => Error(id, MethodNotFound, $"Método no soportado: {method}"),
+                _ => Error(id, MethodNotFound, $"Method not supported: {method}"),
             };
         }
         catch (Exception ex)
         {
-            _log.WriteLine($"[spectrace mcp] error en {method}: {ex}");
+            _log.WriteLine($"[spectrace mcp] error in {method}: {ex}");
             return Error(id, InternalError, ex.Message);
         }
     }
@@ -149,13 +149,13 @@ public sealed class McpServer
                 ["version"] = typeof(McpServer).Assembly.GetName().Version?.ToString(3) ?? "0.0.0",
             },
             ["instructions"] =
-                "SpecTrace da trazabilidad Spec-Driven Development en este repositorio .NET. " +
-                "Antes de implementar, usa get_requirement con el ID del requisito; si no existe, propónlo con propose_requirement. " +
-                "Antes de escribir código, lee con get_code los ficheros relacionados y reutiliza sus tipos; no los supongas. " +
-                "Marca el código con [Implements(Requirements.ID)] y cada test con [Verifies(Requirements.ID, AcceptanceCriteria.ID.AC_n)]. " +
-                "El trabajo está terminado cuando list_requirements con only_gaps=true no devuelve ese requisito. " +
-                "Si un requisito tiene cambios en la spec sin revisar (only_changed=true), revisa su código y sus tests y avisa a una persona; " +
-                "no registres la revisión (dotnet spectrace lock) por tu cuenta.",
+                "SpecTrace provides Spec-Driven Development traceability in this .NET repository. " +
+                "Before implementing, call get_requirement with the requirement ID; if it does not exist, propose it with propose_requirement. " +
+                "Before writing code, read the related files with get_code and reuse their types; do not guess them. " +
+                "Mark the code with [Implements(Requirements.ID)] and each test with [Verifies(Requirements.ID, AcceptanceCriteria.ID.AC_n)]. " +
+                "The work is done when list_requirements with only_gaps=true no longer returns that requirement. " +
+                "If a requirement has unreviewed spec changes (only_changed=true), review its code and tests and tell a person; " +
+                "do not record the review (dotnet spectrace lock) yourself.",
         };
     }
 
@@ -163,7 +163,7 @@ public sealed class McpServer
     {
         var name = @params?["name"]?.GetValue<string>();
         if (string.IsNullOrEmpty(name)) return Error(id, InvalidParams, "Falta 'name'");
-        if (!_tools.Exists(name!)) return Error(id, InvalidParams, $"Herramienta desconocida: {name}");
+        if (!_tools.Exists(name!)) return Error(id, InvalidParams, $"Unknown tool: {name}");
 
         var arguments = @params?["arguments"] as JsonObject ?? new JsonObject();
         return Result(id, _tools.Call(name!, arguments));

@@ -13,7 +13,7 @@ using SpecTrace.Analyzers;
 namespace SpecTrace.Tests
 {
     /// <summary>
-    /// Compila código en memoria, ejecuta el generador y el analizador de SpecTrace y devuelve el resultado.
+    /// Compiles code in memory, runs the SpecTrace generator and analyzer and returns the result.
     /// </summary>
     internal static class TestHarness
     {
@@ -53,14 +53,14 @@ namespace SpecTrace.Tests
             public string GeneratedText(string hintName) =>
                 Generated.Single(g => g.HintName == hintName).SourceText.ToString();
 
-            /// <summary>Emite el ensamblado para usarlo como referencia de otro proyecto (p. ej. el de tests).</summary>
+            /// <summary>Emits the assembly to use as a reference from another project (e.g. the test project).</summary>
             public MetadataReference ToReference()
             {
                 using var ms = new MemoryStream();
                 var emit = Compilation.Emit(ms);
                 if (!emit.Success)
                 {
-                    throw new InvalidOperationException("La compilación falló: " +
+                    throw new InvalidOperationException("Compilation failed: " +
                         string.Join(Environment.NewLine, emit.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error)));
                 }
 
@@ -77,7 +77,7 @@ namespace SpecTrace.Tests
             params MetadataReference[] extraReferences) =>
             RunCore(source, spec, null, isTestProject, assemblyName, rootNamespace, extraReferences);
 
-        /// <summary>Como <see cref="Run"/>, con un spectrace.lock junto a las specs.</summary>
+        /// <summary>Like <see cref="Run"/>, with a spectrace.lock next to the specs.</summary>
         public static Result RunWithLock(
             string source,
             string spec,

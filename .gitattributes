@@ -1,4 +1,4 @@
-# Saltos de línea normalizados en el repositorio (LF); cada sistema usa los suyos al hacer checkout.
+# Line endings are normalized to LF in the repository; each OS uses its own on checkout.
 * text=auto
 *.sh text eol=lf
 *.yml text eol=lf

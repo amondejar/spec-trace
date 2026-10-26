@@ -7,21 +7,21 @@ namespace SpecTrace.Tests
 {
     public class CodeFixTests
     {
-        private const string Spec = @"# Pedidos
+        private const string Spec = @"# Orders
 
-## ORD-001: Crear pedido
+## ORD-001: Create order
 When the customer submits a cart, the system shall create an order.
 
 - AC-1: Given 2 lines, then the order has 2 lines.
 - AC-2: Given an empty cart, then it is rejected.
 
-## ORD-002: Cancelar pedido
+## ORD-002: Cancel order
 While an order is Pending, when it is cancelled, the system shall mark it Cancelled.
 
 - AC-1: Given a Pending order, then it is Cancelled.
 - AC-2: Given a Shipped order, then it is rejected.
 
-## ORD-003: Exportar XML
+## ORD-003: Export XML
 Status: deprecated
 ";
 
@@ -40,7 +40,7 @@ public class OrderService { [Implements(""ORD-01"")] public void Create() { } }"
 
             var fixes = await WorkspaceHarness.FixesAsync(doc, diagnostic);
 
-            Assert.Equal("Cambiar a 'ORD-001'", fixes.First().Title);
+            Assert.Equal("Change to 'ORD-001'", fixes.First().Title);
             var fixedText = await WorkspaceHarness.TextAsync(await WorkspaceHarness.ApplyAsync(fixes.First()), doc.Id);
             Assert.Contains("[Implements(\"ORD-001\")]", fixedText);
         }
@@ -56,7 +56,7 @@ public class T { [Verifies(""ORD-001"", ""AC-9"")] public void M() { } }");
 
             var fixes = await WorkspaceHarness.FixesAsync(doc, diagnostic);
 
-            Assert.Equal(new[] { "Cambiar a 'AC-1'", "Cambiar a 'AC-2'" }, fixes.Select(f => f.Title).ToArray());
+            Assert.Equal(new[] { "Change to 'AC-1'", "Change to 'AC-2'" }, fixes.Select(f => f.Title).ToArray());
             var fixedText = await WorkspaceHarness.TextAsync(await WorkspaceHarness.ApplyAsync(fixes[1]), doc.Id);
             Assert.Contains("[Verifies(\"ORD-001\", \"AC-2\")]", fixedText);
         }
@@ -68,7 +68,7 @@ public class T { [Verifies(""ORD-001"", ""AC-9"")] public void M() { } }");
 using SpecTrace;
 public class Legacy
 {
-    /// <summary>Exporta.</summary>
+    /// <summary>Exports.</summary>
     [Implements(""ORD-003"")]
     public void Export() { }
 
@@ -82,7 +82,7 @@ public class Legacy
 
             var first = await WorkspaceHarness.ApplyAsync((await WorkspaceHarness.FixesAsync(doc, diagnostics[0])).Single());
             var text1 = await WorkspaceHarness.TextAsync(first, doc.Id);
-            Assert.Contains("    /// <summary>Exporta.</summary>\n    public void Export() { }", text1.Replace("\r\n", "\n"));
+            Assert.Contains("    /// <summary>Exports.</summary>\n    public void Export() { }", text1.Replace("\r\n", "\n"));
 
             var second = await WorkspaceHarness.ApplyAsync((await WorkspaceHarness.FixesAsync(doc, diagnostics[1])).Single());
             var text2 = await WorkspaceHarness.TextAsync(second, doc.Id);
@@ -102,7 +102,7 @@ public class OrderTests
 }");
             var doc = ws.Code(ws.AppId);
 
-            var action = (await WorkspaceHarness.RefactoringsAsync(doc, "\"ORD-001\"")).Single(a => a.Title.StartsWith("Usar constantes"));
+            var action = (await WorkspaceHarness.RefactoringsAsync(doc, "\"ORD-001\"")).Single(a => a.Title.StartsWith("Use SpecTrace catalog constants"));
             var text = await WorkspaceHarness.TextAsync(await WorkspaceHarness.ApplyAsync(action), doc.Id);
 
             Assert.Contains("[Verifies(Requirements.ORD_001, AcceptanceCriteria.ORD_001.AC_2)]", text);
@@ -120,7 +120,7 @@ public class S { [Implements(Requirements.ORD_001)] public void M() { } }");
 
             var actions = await WorkspaceHarness.RefactoringsAsync(doc, "Requirements.ORD_001");
 
-            Assert.DoesNotContain(actions, a => a.Title.StartsWith("Usar constantes"));
+            Assert.DoesNotContain(actions, a => a.Title.StartsWith("Use SpecTrace catalog constants"));
         }
 
         [Fact]
@@ -140,12 +140,12 @@ public class Existing
 }" + XunitShim);
             var doc = ws.Code(ws.AppId);
 
-            var action = (await WorkspaceHarness.RefactoringsAsync(doc, "Requirements.ORD_002")).Single(a => a.Title.StartsWith("Generar tests"));
-            Assert.Equal("Generar tests de ORD-002 en App.Tests (1 criterio)", action.Title);
+            var action = (await WorkspaceHarness.RefactoringsAsync(doc, "Requirements.ORD_002")).Single(a => a.Title.StartsWith("Generate tests"));
+            Assert.Equal("Generate tests for ORD-002 in App.Tests (1 criterion)", action.Title);
 
             var solution = await WorkspaceHarness.ApplyAsync(action);
             var tests = solution.GetProject(ws.TestsId!)!;
-            var generated = tests.Documents.Single(d => d.Name == "ORD_002_CancelarPedidoTests.cs");
+            var generated = tests.Documents.Single(d => d.Name == "ORD_002_CancelOrderTests.cs");
             var text = (await generated.GetTextAsync()).ToString();
 
             Assert.Equal(new[] { "Specs" }, generated.Folders.ToArray());
@@ -156,7 +156,7 @@ public class Existing
             var compilation = (await tests.GetCompilationAsync())!;
             Assert.Empty(compilation.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error));
 
-            // El test generado lleva Skip: el criterio sigue pendiente (ST0005).
+            // The generated test has Skip: the criterion is still pending (ST0005).
             var after = await WorkspaceHarness.AnalyzeAsync(tests);
             Assert.Contains(after, d => d.Id == "ST0005" && d.GetMessage().Contains("AC-2"));
         }
@@ -170,7 +170,7 @@ public class OrderService { [Implements(""ORD-002"")] public void Cancel() { } }
 
             var actions = await WorkspaceHarness.RefactoringsAsync(doc, "\"ORD-002\"");
 
-            Assert.DoesNotContain(actions, a => a.Title.StartsWith("Generar tests"));
+            Assert.DoesNotContain(actions, a => a.Title.StartsWith("Generate tests"));
         }
     }
 }

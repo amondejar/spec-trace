@@ -21,16 +21,16 @@ jobs:
             8.0.x
             10.0.x
 
-      - name: Restaurar
+      - name: Restore
         run: dotnet restore SpecTrace.sln
 
-      - name: Compilar
+      - name: Build
         run: dotnet build SpecTrace.sln -c Release --no-restore
 
       - name: Tests
         run: dotnet test tests/SpecTrace.Tests -c Release --no-build --logger "trx;LogFileName=results.trx"
 
-      - name: Empaquetar
+      - name: Pack
         run: |
           dotnet pack src/SpecTrace.Abstractions -c Release --no-build -o artifacts
           dotnet pack src/SpecTrace.Package -c Release -o artifacts
@@ -41,7 +41,7 @@ jobs:
           name: packages
           path: artifacts/*.nupkg
 
-  # La propia Action, probada contra la muestra con la herramienta recién empaquetada.
+  # The Action itself, run against the sample with the freshly packed tool.
   sample-report:
     needs: build
     runs-on: ubuntu-latest
@@ -53,16 +53,16 @@ jobs:
           name: packages
           path: artifacts
 
-      - name: Informe de la muestra
+      - name: Sample report
         id: spectrace
         uses: ./
         with:
           root: samples/Orders
           tool-source: ${{ github.workspace }}/artifacts
-          # La muestra tiene huecos a propósito (ORD-003 y ORD-002 AC-2): no debe romper el CI.
+          # The sample has intentional gaps (ORD-003 and ORD-002 AC-2): they must not break CI.
           fail-on-gaps: "false"
 
-      - name: Comprobar que la muestra sigue teniendo sus 2 huecos y su cambio sin revisar
+      - name: Check the sample still has its 2 gaps and its unreviewed change
         run: |
           test "${{ steps.spectrace.outputs.gaps }}" = "2"
           test "${{ steps.spectrace.outputs.drift }}" = "1"

@@ -29,7 +29,7 @@ namespace Orders
         [Implements(Requirements.ORD_001)]
         public Order Create(IReadOnlyList<OrderLine> cart)
         {
-            if (cart.Count == 0) throw new ArgumentException("El carrito está vacío.", nameof(cart));
+            if (cart.Count == 0) throw new ArgumentException("The cart is empty.", nameof(cart));
             return new Order(Guid.NewGuid(), cart.ToList());
         }
 
@@ -37,10 +37,10 @@ namespace Orders
         public void Cancel(Order order)
         {
             if (order.State != OrderState.Pending)
-                throw new InvalidOperationException($"No se puede cancelar un pedido en estado {order.State}.");
+                throw new InvalidOperationException($"Cannot cancel an order in state {order.State}.");
             order.State = OrderState.Cancelled;
         }
 
-        // ORD-003 (cupones) todavía no está implementado: SpecTrace lo marca con ST0003.
+        // ORD-003 (coupons) is not implemented yet: SpecTrace reports it as ST0003.
     }
 }

@@ -1,9 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <!--
-    Paquete NuGet "SpecTrace". No contiene código propio: reúne en analyzers/dotnet/cs
-    el analizador + generador (SpecTrace.Analyzers.dll) y los code fixes (SpecTrace.CodeFixes.dll),
-    añade los props/targets de MSBuild y declara la dependencia de SpecTrace.Abstractions.
+    The "SpecTrace" NuGet package. It has no code of its own: it puts the analyzer + generator
+    (SpecTrace.Analyzers.dll) and the code fixes (SpecTrace.CodeFixes.dll) in analyzers/dotnet/cs,
+    adds the MSBuild props/targets and declares the dependency on SpecTrace.Abstractions.
   -->
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
@@ -12,17 +12,17 @@
     <NoWarn>$(NoWarn);NU5128</NoWarn>
 
     <PackageId>SpecTrace</PackageId>
-    <Description>Trazabilidad Spec-Driven Development para .NET: catálogo tipado de requisitos generado desde specs Markdown, diagnósticos de compilación para requisitos sin implementar o sin test, y code fixes en el IDE.</Description>
-    <PackageTags>sdd;spec-driven-development;roslyn;analyzer;source-generator;codefix;traceability;ai-agents</PackageTags>
+    <Description>Spec-Driven Development traceability for .NET. Generates a typed requirements catalog from Markdown specs and reports, at build time, requirements that are not implemented, not tested or changed after review. Includes IDE code fixes. Works with Spec Kit, OpenSpec and AI coding agents.</Description>
+    <PackageTags>sdd;spec-driven-development;requirements;traceability;roslyn;analyzer;source-generator;codefix;spec-kit;openspec;ai-agents</PackageTags>
     <DevelopmentDependency>false</DevelopmentDependency>
 
     <TargetsForTfmSpecificContentInPackage>$(TargetsForTfmSpecificContentInPackage);_SpecTraceAddAnalyzers</TargetsForTfmSpecificContentInPackage>
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Dependencia real del paquete: los atributos. -->
+    <!-- The package's real dependency: the attributes. -->
     <ProjectReference Include="..\SpecTrace.Abstractions\SpecTrace.Abstractions.csproj" />
-    <!-- Solo se copian para meterlos en analyzers/; no son dependencias del paquete. -->
+    <!-- Only copied into analyzers/; not dependencies of the package. -->
     <ProjectReference Include="..\SpecTrace.Analyzers\SpecTrace.Analyzers.csproj" PrivateAssets="all" />
     <ProjectReference Include="..\SpecTrace.CodeFixes\SpecTrace.CodeFixes.csproj" PrivateAssets="all" />
   </ItemGroup>

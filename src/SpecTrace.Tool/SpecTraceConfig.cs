@@ -4,7 +4,7 @@ using System.Text.Json;
 
 namespace SpecTrace.Tool;
 
-/// <summary>Contenido de spectrace.json, que marca la raíz del repo para SpecTrace.</summary>
+/// <summary>Contents of spectrace.json, which marks the repository root for SpecTrace.</summary>
 public sealed class SpecTraceConfig
 {
     public const string FileName = "spectrace.json";
@@ -13,7 +13,7 @@ public sealed class SpecTraceConfig
     public string Specs { get; set; } = "specs";
     public string[] Sources { get; set; } = { "src", "tests" };
 
-    /// <summary>Busca spectrace.json desde <paramref name="start"/> hacia arriba. Sin fichero: valores por defecto.</summary>
+    /// <summary>Looks for spectrace.json from <paramref name="start"/> upwards. Without a file: defaults.</summary>
     public static SpecTraceConfig Load(string start)
     {
         var dir = new DirectoryInfo(Path.GetFullPath(start));

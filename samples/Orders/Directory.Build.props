@@ -1,7 +1,7 @@
 <Project>
   <!--
-    En un repo real basta con:  <PackageReference Include="SpecTrace" Version="0.4.0-preview.1" />
-    Aquí el ejemplo consume el analizador y los code fixes directamente desde el código fuente del repositorio.
+    In a real repository all you need is:  <PackageReference Include="SpecTrace" Version="0.4.1-preview.1" />
+    Here the sample consumes the analyzer and the code fixes straight from the repository source code.
   -->
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
@@ -15,7 +15,7 @@
   <ItemGroup>
     <ProjectReference Include="$(MSBuildThisFileDirectory)../../src/SpecTrace.Analyzers/SpecTrace.Analyzers.csproj"
                       OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
-    <!-- Code fixes y refactorizaciones: solo los usa el IDE (Visual Studio, Rider, VS Code con C# Dev Kit). -->
+    <!-- Code fixes and refactorings: only used by the IDE (Visual Studio, Rider, VS Code with C# Dev Kit). -->
     <ProjectReference Include="$(MSBuildThisFileDirectory)../../src/SpecTrace.CodeFixes/SpecTrace.CodeFixes.csproj"
                       OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
     <ProjectReference Include="$(MSBuildThisFileDirectory)../../src/SpecTrace.Abstractions/SpecTrace.Abstractions.csproj" />

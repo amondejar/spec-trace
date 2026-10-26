@@ -13,8 +13,8 @@ using SpecTrace.Analyzers;
 namespace SpecTrace.CodeFixes
 {
     /// <summary>
-    /// ST0001: cambiar a un ID existente parecido. ST0002: cambiar a un criterio válido.
-    /// ST0006: quitar la referencia al requisito obsoleto.
+    /// ST0001: change to a similar existing ID. ST0002: change to a valid criterion.
+    /// ST0006: remove the reference to the deprecated requirement.
     /// </summary>
     [ExportCodeFixProvider(LanguageNames.CSharp, Name = nameof(SpecTraceCodeFixProvider)), Shared]
     public sealed class SpecTraceCodeFixProvider : CodeFixProvider
@@ -40,7 +40,7 @@ namespace SpecTrace.CodeFixes
                     var attribute = node.FirstAncestorOrSelf<AttributeSyntax>();
                     if (attribute == null) continue;
                     context.RegisterCodeFix(CodeAction.Create(
-                        "Quitar la referencia al requisito obsoleto",
+                        "Remove the reference to the deprecated requirement",
                         ct => RemoveAttributeAsync(context.Document, attribute, ct),
                         equivalenceKey: DiagnosticIds.DeprecatedRequirement),
                         diagnostic);
@@ -54,7 +54,7 @@ namespace SpecTrace.CodeFixes
                 foreach (var suggestion in raw!.Split(';').Where(s => s.Length > 0))
                 {
                     context.RegisterCodeFix(CodeAction.Create(
-                        $"Cambiar a '{suggestion}'",
+                        $"Change to '{suggestion}'",
                         ct => ReplaceLiteralAsync(context.Document, argument.Expression, suggestion, ct),
                         equivalenceKey: diagnostic.Id + ":" + suggestion),
                         diagnostic);
@@ -79,8 +79,8 @@ namespace SpecTrace.CodeFixes
                 return document.WithSyntaxRoot(root!.RemoveNode(attribute, SyntaxRemoveOptions.KeepNoTrivia)!);
             }
 
-            // Se quita la lista entera; si era lo primero del miembro, su trivia inicial
-            // (comentarios XML, indentación) pasa a lo que venga después.
+            // Remove the whole list; if it was the first thing in the member, its leading trivia
+            // (XML doc comments, indentation) moves to whatever comes next.
             var parent = list.Parent!;
             var wasFirst = parent.GetFirstToken() == list.GetFirstToken();
             var newParent = parent.RemoveNode(list, SyntaxRemoveOptions.KeepNoTrivia)!;

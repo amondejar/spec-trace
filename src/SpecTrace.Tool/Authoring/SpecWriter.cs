@@ -7,10 +7,10 @@ using SpecTrace.Specs;
 
 namespace SpecTrace.Tool.Authoring;
 
-/// <summary>Un requisito listo para escribir en una spec.</summary>
+/// <summary>A requirement ready to be written into a spec.</summary>
 public sealed record RequirementDraft(string Id, string Title, string Status, string Statement, IReadOnlyList<string> Criteria, string? Note = null);
 
-/// <summary>Escribe requisitos en el formato de SpecTrace y calcula IDs nuevos.</summary>
+/// <summary>Writes requirements in the SpecTrace format and computes new IDs.</summary>
 public static class SpecWriter
 {
     private static readonly Regex IdParts = new(@"^(?<prefix>.+)-(?<number>\d+)$", RegexOptions.Compiled);
@@ -65,8 +65,8 @@ public static class SpecWriter
     }
 
     /// <summary>
-    /// Siguiente ID con el prefijo más usado del documento (o <paramref name="prefix"/>), conservando el ancho
-    /// numérico: ORD-001..ORD-005 → ORD-006.
+    /// Next ID with the document's most used prefix (or <paramref name="prefix"/>), keeping the numeric
+    /// width: ORD-001..ORD-005 → ORD-006.
     /// </summary>
     public static string NextId(IEnumerable<string> existingIds, string? prefix = null)
     {
@@ -77,7 +77,7 @@ public static class SpecWriter
             .ToList();
 
         var chosen = prefix ?? parsed.GroupBy(p => p.Prefix).OrderByDescending(g => g.Count()).Select(g => g.Key).FirstOrDefault()
-            ?? throw new ArgumentException("La spec no tiene requisitos de los que deducir el prefijo; indica el ID o el prefijo.");
+            ?? throw new ArgumentException("The spec has no requirements to infer the prefix from; give the ID or the prefix.");
 
         var same = parsed.Where(p => p.Prefix == chosen).ToList();
         var width = same.Count > 0 ? same.Max(p => p.Number.Length) : 3;
@@ -88,7 +88,7 @@ public static class SpecWriter
     public static bool IsValidId(string id) =>
         Regex.IsMatch(id, @"^[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*-\d+$");
 
-    /// <summary>Prefijo válido para IDs a partir de un nombre libre: "photo-albums" → "PHOTO-ALBUMS".</summary>
+    /// <summary>Valid ID prefix from a free-text name: "photo-albums" → "PHOTO-ALBUMS".</summary>
     public static string ToPrefix(string name)
     {
         var cleaned = Regex.Replace(SpecNaming.ToPascalSlug(name.Replace('-', ' ').Replace('_', ' '), 4), "(?<=[a-z0-9])(?=[A-Z])", "-").ToUpperInvariant();

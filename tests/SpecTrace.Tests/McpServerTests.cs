@@ -28,14 +28,14 @@ namespace SpecTrace.Tests
             File.WriteAllText(Path.Combine(_root, "src", "appsettings.Secret.json"), "{ \"ApiKey\": \"no-debe-leerse\" }");
             Directory.CreateDirectory(Path.Combine(_root, "src", "obj"));
             File.WriteAllText(Path.Combine(_root, "src", "obj", "Generated.cs"), "class Generated { }");
-            File.WriteAllText(Path.Combine(_root, "specs", "orders.spec.md"), @"# Pedidos
+            File.WriteAllText(Path.Combine(_root, "specs", "orders.spec.md"), @"# Orders
 
-## ORD-001: Crear pedido
+## ORD-001: Create café order
 The system shall create orders.
 
 - AC-1: Given 2 lines, then 2 lines.
 
-## ORD-002: Cancelar pedido
+## ORD-002: Cancel order
 The system shall cancel orders.
 
 - AC-1: Given Pending, then Cancelled.
@@ -119,7 +119,7 @@ public class OrderTests
         [Fact]
         public void Get_requirement_returns_context_or_a_tool_error()
         {
-            Assert.Contains("SIN TEST", TextOf(Call("get_requirement", "{\"id\":\"ORD-002\"}")));
+            Assert.Contains("NO TEST", TextOf(Call("get_requirement", "{\"id\":\"ORD-002\"}")));
 
             var missing = Call("get_requirement", "{\"id\":\"ORD-999\"}");
             Assert.True(missing["isError"]!.GetValue<bool>());
@@ -130,12 +130,12 @@ public class OrderTests
         {
             var text = TextOf(Call("get_requirement", "{\"id\":\"ORD-002\"}"));
 
-            // Implementación: RootNamespace del .csproj + ".Specs". Tests: nombre del proyecto + ".Specs".
-            Assert.Contains("Implementación en `App` (src): `using SpecTrace;` y `using Shop.App.Specs;`", text);
-            Assert.Contains("Tests en `App.Tests` (tests/App.Tests): `using SpecTrace;` y `using App.Tests.Specs;`", text);
-            // ORD-002 aún no tiene código: se ofrecen los ficheros de ORD-001, de la misma spec.
-            Assert.Contains("- src/OrderService.cs — implementa ORD-001", text);
-            Assert.Contains("- tests/App.Tests/OrderTests.cs — verifica ORD-001", text);
+            // Implementation: the .csproj RootNamespace + ".Specs". Tests: the project name + ".Specs".
+            Assert.Contains("Implementation in `App` (src): `using SpecTrace;` and `using Shop.App.Specs;`", text);
+            Assert.Contains("Tests in `App.Tests` (tests/App.Tests): `using SpecTrace;` and `using App.Tests.Specs;`", text);
+            // ORD-002 has no code yet: the files of ORD-001, from the same spec, are offered.
+            Assert.Contains("- src/OrderService.cs — implements ORD-001", text);
+            Assert.Contains("- tests/App.Tests/OrderTests.cs — verifies ORD-001", text);
         }
 
         [Fact]
@@ -145,7 +145,7 @@ public class OrderTests
 
             Assert.False(result["isError"]!.GetValue<bool>());
             var text = TextOf(result);
-            Assert.Contains("ORD-002 aún no tiene código", text);
+            Assert.Contains("ORD-002 has no code yet", text);
             Assert.Contains("### src/OrderService.cs", text);
             Assert.Contains("[Implements(Requirements.ORD_001)]", text);
             Assert.Contains("### tests/App.Tests/OrderTests.cs", text);
@@ -185,8 +185,8 @@ public class OrderTests
 
             await _server.RunAsync(input, output);
 
-            Assert.Contains("Criterios de aceptación", output.ToString());
-            Assert.DoesNotContain(new[] { output.ToString() }, o => o.Contains("\\u00F3"));
+            Assert.Contains("Create café order", output.ToString());
+            Assert.DoesNotContain(new[] { output.ToString() }, o => o.Contains("\\u00E9"));
         }
 
         [Fact]
@@ -202,7 +202,7 @@ public class OrderTests
         {
             var ok = Call("scaffold_tests", "{\"test_project\":\"tests/App.Tests\",\"requirement_id\":\"ORD-002\"}");
             Assert.False(ok["isError"]!.GetValue<bool>());
-            Assert.True(File.Exists(Path.Combine(_root, "tests", "App.Tests", "Specs", "ORD_002_CancelarPedidoTests.cs")));
+            Assert.True(File.Exists(Path.Combine(_root, "tests", "App.Tests", "Specs", "ORD_002_CancelOrderTests.cs")));
 
             var escape = Call("scaffold_tests", "{\"test_project\":\"../../\"}");
             Assert.True(escape["isError"]!.GetValue<bool>());
@@ -212,7 +212,7 @@ public class OrderTests
         public void Propose_requirement_appends_a_proposed_requirement_with_the_next_id()
         {
             var result = Call("propose_requirement",
-                "{\"spec_file\":\"orders.spec.md\",\"title\":\"Aplicar cupón\",\"statement\":\"When a coupon is applied, the system shall reduce the total.\",\"criteria\":[\"Given 100 EUR and 10%, then 90 EUR.\"]}");
+                "{\"spec_file\":\"orders.spec.md\",\"title\":\"Apply coupon\",\"statement\":\"When a coupon is applied, the system shall reduce the total.\",\"criteria\":[\"Given 100 EUR and 10%, then 90 EUR.\"]}");
 
             Assert.False(result["isError"]!.GetValue<bool>());
             Assert.Contains("ORD-003", TextOf(result));
@@ -232,7 +232,7 @@ public class OrderTests
 
             var duplicate = Call("propose_requirement", "{\"spec_file\":\"orders.spec.md\",\"id\":\"ORD-001\",\"title\":\"x\",\"statement\":\"y\",\"criteria\":[\"z\"]}");
             Assert.True(duplicate["isError"]!.GetValue<bool>());
-            Assert.Contains("ya existe", TextOf(duplicate));
+            Assert.Contains("already exists", TextOf(duplicate));
         }
 
         [Fact]

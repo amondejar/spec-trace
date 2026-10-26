@@ -1,8 +1,8 @@
 name: SpecTrace report
 description: >
-  Publica la trazabilidad spec → código → test de SpecTrace en cada pull request:
-  anotaciones en los ficheros, resumen del job y un comentario con la matriz completa
-  que se actualiza en cada push.
+  Publishes SpecTrace spec → code → test traceability on every pull request:
+  file annotations, job summary and one comment with the full matrix,
+  updated on every push.
 author: SpecTrace contributors
 branding:
   icon: check-square
@@ -10,36 +10,36 @@ branding:
 
 inputs:
   root:
-    description: Carpeta que contiene spectrace.json (relativa a la raíz del repositorio).
+    description: Folder containing spectrace.json (relative to the repository root).
     default: "."
   fail-on-gaps:
-    description: Si es 'true', el job falla cuando hay requisitos activos sin implementar, sin tests o con criterios sin test.
+    description: If 'true', the job fails when active requirements are not implemented, have no tests, or have criteria without tests.
     default: "false"
   fail-on-drift:
-    description: Si es 'true', el job falla cuando el texto de un requisito cambió después de revisarse (spectrace.lock) y su código o sus tests siguen sin revisar.
+    description: If 'true', the job fails when a requirement's text changed after review (spectrace.lock) and its code or tests have not been reviewed.
     default: "false"
   comment:
-    description: Si es 'true' y el evento es una pull request, publica o actualiza un comentario con el informe.
+    description: If 'true' and the event is a pull request, posts or updates a comment with the report.
     default: "true"
   tool-version:
-    description: Versión de SpecTrace.Tool a instalar. Vacío = la última publicada (incluidas preview).
+    description: SpecTrace.Tool version to install. Empty = latest published (including previews).
     default: ""
   tool-source:
-    description: Fuente NuGet adicional para instalar la herramienta (por ejemplo una carpeta con un .nupkg local).
+    description: Extra NuGet source to install the tool from (for example a folder with a local .nupkg).
     default: ""
   dotnet-version:
-    description: SDK de .NET con el que ejecutar la herramienta.
+    description: .NET SDK used to run the tool.
     default: "8.0.x"
   github-token:
-    description: Token para publicar el comentario. Necesita permiso pull-requests:write.
+    description: Token used to post the comment. Needs the pull-requests:write permission.
     default: ${{ github.token }}
 
 outputs:
   gaps:
-    description: Número de requisitos con huecos (sin implementar, sin tests o con criterios sin test).
+    description: Number of requirements with gaps (not implemented, no tests, or criteria without tests).
     value: ${{ steps.report.outputs.gaps }}
   drift:
-    description: Número de requisitos cuyo texto cambió después de la última revisión y tienen código o tests por revisar.
+    description: Number of requirements whose text changed after the last review and have code or tests to review.
     value: ${{ steps.report.outputs.drift }}
 
 runs:
@@ -49,7 +49,7 @@ runs:
       with:
         dotnet-version: ${{ inputs.dotnet-version }}
 
-    - name: Instalar SpecTrace.Tool
+    - name: Install SpecTrace.Tool
       shell: bash
       env:
         TOOL_VERSION: ${{ inputs.tool-version }}
@@ -61,7 +61,7 @@ runs:
         dotnet "${args[@]}"
         echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
 
-    - name: Generar informe
+    - name: Generate report
       id: report
       shell: bash
       env:
@@ -71,22 +71,22 @@ runs:
         root="${ROOT%/}"
         if [ "$root" = "." ]; then prefix=""; else prefix="$root/"; fi
 
-        # Anotaciones en los ficheros de la PR.
+        # Annotations on the PR files.
         spectrace report --root "$root" --format github
 
-        # Informe en Markdown con enlaces absolutos, para el resumen del job y el comentario.
+        # Markdown report with absolute links, for the job summary and the comment.
         spectrace report --root "$root" --link-base "${LINK_BASE}${prefix}" --out "$RUNNER_TEMP/spectrace-report.md" > /dev/null
         cat "$RUNNER_TEMP/spectrace-report.md" >> "$GITHUB_STEP_SUMMARY"
 
         gaps=$(spectrace report --root "$root" --format json | jq '[.requirements[] | select(.gap)] | length')
         echo "gaps=$gaps" >> "$GITHUB_OUTPUT"
-        echo "Requisitos con huecos: $gaps"
+        echo "Requirements with gaps: $gaps"
 
         drift=$(spectrace report --root "$root" --format json | jq '[.requirements[] | select(.drift.pending)] | length')
         echo "drift=$drift" >> "$GITHUB_OUTPUT"
-        echo "Requisitos con cambios en la spec sin revisar: $drift"
+        echo "Requirements with unreviewed spec changes: $drift"
 
-    - name: Comentar en la PR
+    - name: Comment on the PR
       if: inputs.comment == 'true' && github.event_name == 'pull_request'
       uses: actions/github-script@v7
       env:
@@ -108,16 +108,16 @@ runs:
             await github.rest.issues.createComment({ owner, repo, issue_number, body });
           }
 
-    - name: Fallar si hay huecos
+    - name: Fail on gaps
       if: inputs.fail-on-gaps == 'true' && steps.report.outputs.gaps != '0'
       shell: bash
       run: |
-        echo "::error title=SpecTrace::Hay ${{ steps.report.outputs.gaps }} requisito(s) con huecos de trazabilidad. Revisa el informe."
+        echo "::error title=SpecTrace::${{ steps.report.outputs.gaps }} requirement(s) with traceability gaps. See the report."
         exit 1
 
-    - name: Fallar si hay cambios en la spec sin revisar
+    - name: Fail on unreviewed spec changes
       if: inputs.fail-on-drift == 'true' && steps.report.outputs.drift != '0'
       shell: bash
       run: |
-        echo "::error title=SpecTrace::Hay ${{ steps.report.outputs.drift }} requisito(s) cuyo texto cambió después de revisarse. Revisa su código y sus tests y ejecuta dotnet spectrace lock --requirement <ID>."
+        echo "::error title=SpecTrace::${{ steps.report.outputs.drift }} requirement(s) changed after review. Review their code and tests and run dotnet spectrace lock --requirement <ID>."
         exit 1

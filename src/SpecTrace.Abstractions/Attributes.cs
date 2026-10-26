@@ -3,7 +3,7 @@ using System;
 namespace SpecTrace
 {
     /// <summary>
-    /// Declara que el elemento anotado implementa un requisito de la spec.
+    /// Declares that the annotated element implements a requirement from the spec.
     /// </summary>
     /// <example><code>[Implements(Requirements.ORD_001)]</code></example>
     [AttributeUsage(
@@ -14,12 +14,12 @@ namespace SpecTrace
     {
         public ImplementsAttribute(string requirementId) => RequirementId = requirementId;
 
-        /// <summary>ID del requisito, por ejemplo <c>ORD-001</c>.</summary>
+        /// <summary>Requirement ID, for example <c>ORD-001</c>.</summary>
         public string RequirementId { get; }
     }
 
     /// <summary>
-    /// Declara que un test verifica un requisito y, opcionalmente, uno de sus criterios de aceptación.
+    /// Declares that a test verifies a requirement and, optionally, one of its acceptance criteria.
     /// </summary>
     /// <example><code>[Verifies(Requirements.ORD_001, AcceptanceCriteria.ORD_001.AC_1)]</code></example>
     [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method, AllowMultiple = true, Inherited = false)]
@@ -31,16 +31,16 @@ namespace SpecTrace
             Criterion = criterion;
         }
 
-        /// <summary>ID del requisito, por ejemplo <c>ORD-001</c>.</summary>
+        /// <summary>Requirement ID, for example <c>ORD-001</c>.</summary>
         public string RequirementId { get; }
 
-        /// <summary>ID del criterio de aceptación, por ejemplo <c>AC-1</c>. Nulo = el requisito en conjunto.</summary>
+        /// <summary>Acceptance criterion ID, for example <c>AC-1</c>. Null means the requirement as a whole.</summary>
         public string? Criterion { get; }
     }
 
     /// <summary>
-    /// Lo emite el generador de SpecTrace en cada ensamblado de implementación con los requisitos que implementa.
-    /// Los proyectos de test lo leen de sus referencias para saber qué falta verificar. No lo uses a mano.
+    /// Emitted by the SpecTrace generator in each implementation assembly, listing the requirements it implements.
+    /// Test projects read it from their references to know what still has to be verified. Do not use it by hand.
     /// </summary>
     [AttributeUsage(AttributeTargets.Assembly, AllowMultiple = true)]
     public sealed class SpecTraceImplementedAttribute : Attribute

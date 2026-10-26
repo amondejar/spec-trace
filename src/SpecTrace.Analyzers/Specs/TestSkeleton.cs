@@ -5,19 +5,19 @@ using System.Text;
 namespace SpecTrace.Specs
 {
     /// <summary>
-    /// Plantilla de tests xUnit para los criterios de un requisito. La comparten la CLI
-    /// (<c>dotnet spectrace scaffold-tests</c>) y la refactorización del IDE "Generar tests".
+    /// xUnit test template for the criteria of a requirement. Shared by the CLI
+    /// (<c>dotnet spectrace scaffold-tests</c>) and the IDE "Generate tests" refactoring.
     /// </summary>
     public static class TestSkeleton
     {
-        public const string SkipReason = "SpecTrace: pendiente de implementar";
+        public const string SkipReason = "SpecTrace: not implemented yet";
 
         public static string ClassName(SpecRequirement requirement) =>
             $"{requirement.Identifier}_{SpecNaming.ToPascalSlug(requirement.Title)}Tests";
 
         public static string FileName(SpecRequirement requirement) => ClassName(requirement) + ".cs";
 
-        /// <param name="rootNamespace">Namespace raíz del proyecto de tests; el catálogo vive en <c>{rootNamespace}.Specs</c>.</param>
+        /// <param name="rootNamespace">Root namespace of the test project; the catalog lives in <c>{rootNamespace}.Specs</c>.</param>
         public static string Render(string rootNamespace, SpecRequirement r, IReadOnlyList<SpecCriterion> criteria)
         {
             var sb = new StringBuilder();

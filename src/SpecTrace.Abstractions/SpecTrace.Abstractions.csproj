@@ -6,7 +6,8 @@
     <Nullable>enable</Nullable>
     <RootNamespace>SpecTrace</RootNamespace>
     <PackageId>SpecTrace.Abstractions</PackageId>
-    <Description>Atributos [Implements] y [Verifies] para trazar requisitos de specs SDD hasta el código y los tests.</Description>
+    <Description>The [Implements] and [Verifies] attributes that trace Spec-Driven Development requirements to code and tests. Used by the SpecTrace analyzer.</Description>
+    <PackageTags>sdd;spec-driven-development;traceability;requirements;attributes</PackageTags>
   </PropertyGroup>
 
 </Project>

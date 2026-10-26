@@ -1,11 +1,11 @@
 <Project>
 
-  <!-- En .targets para que las propiedades definidas en el .csproj ya estén resueltas. -->
+  <!-- In .targets so that properties set in the .csproj are already resolved. -->
   <PropertyGroup>
     <SpecTraceSpecsDir Condition="'$(SpecTraceSpecsDir)' == ''">$(SpecTraceRoot)specs/</SpecTraceSpecsDir>
   </PropertyGroup>
 
-  <!-- Versión revisada de cada requisito (dotnet spectrace lock): activa ST0010/ST0011. -->
+  <!-- Reviewed version of each requirement (dotnet spectrace lock): enables ST0010/ST0011. -->
   <ItemGroup Condition="Exists('$(SpecTraceRoot)spectrace.lock')">
     <AdditionalFiles Include="$(SpecTraceRoot)spectrace.lock" Link="specs/spectrace.lock" />
   </ItemGroup>

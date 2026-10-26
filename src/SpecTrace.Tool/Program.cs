@@ -10,41 +10,41 @@ return Cli.Run(args);
 internal static class Cli
 {
     private const string Usage = """
-        SpecTrace: trazabilidad Spec-Driven Development para .NET
+        SpecTrace: Spec-Driven Development traceability for .NET
 
-        Uso: dotnet spectrace <comando> [opciones]
+        Usage: dotnet spectrace <command> [options]
 
-        Comandos:
-          report          Matriz requisito → código → test.
+        Commands:
+          report          Requirement → code → test matrix.
                             --format md|json|github
-                                               md por defecto; github = anotaciones para GitHub Actions
-                            --link-base <url>  prefijo para enlaces absolutos en md (comentarios de PR)
-                            --out <fichero>    escribir a fichero en vez de a la consola
-                            --fail-on-gaps     código de salida 1 si hay requisitos activos sin implementar o sin test
-                            --fail-on-drift    código de salida 1 si hay cambios en la spec sin revisar (spectrace.lock)
-          lock            Registra la versión actual de la spec como revisada (spectrace.lock).
-                            --requirement <ID> solo ese requisito (repetible); sin él, todos los activos
-                            --check            no escribe: código de salida 1 si hay cambios sin revisar
-          context <ID>    Contexto de un requisito para un agente: enunciado, criterios, estado y cómo marcarlo.
-          scaffold-tests  Esqueletos xUnit para los criterios sin test.
-                            --project <dir>    carpeta del proyecto de tests (obligatorio)
-                            --requirement <ID> solo ese requisito
-                            --namespace <ns>   namespace raíz del proyecto de tests
-          mcp             Servidor MCP por stdio para agentes (Claude Code, VS Code, Agent Framework...).
-          import speckit <ruta>
-                          Importa specs de GitHub Spec Kit (spec.md o carpeta specs/).
-                            --prefix <P>       prefijo de los IDs (por defecto, iniciales de la feature: PA1)
-                            --out <fichero>    destino (solo con una feature); por defecto spectrace.spec.md junto a la fuente
-          import openspec <ruta>
-                          Importa specs de OpenSpec (openspec/, openspec/specs o un spec.md).
-                            --prefix <P>       prefijo de los IDs (por defecto, el nombre de la capacidad: AUTH)
-                            --out <fichero>    destino (solo con una capacidad); por defecto <specs>/<capacidad>.spec.md
-                          Comunes: --status approved|proposed (estado de lo importado con criterios), --dry-run
-          init            Crea spectrace.json, specs/example.spec.md, la skill para agentes y .mcp.json.
-                            --skills-dir <dir> carpeta de skills (por defecto .claude/skills)
+                                               md by default; github = GitHub Actions annotations
+                            --link-base <url>  prefix for absolute links in md (PR comments)
+                            --out <file>       write to a file instead of the console
+                            --fail-on-gaps     exit code 1 if active requirements are not implemented or not tested
+                            --fail-on-drift    exit code 1 if there are unreviewed spec changes (spectrace.lock)
+          lock            Records the current version of the spec as reviewed (spectrace.lock).
+                            --requirement <ID> only that requirement (repeatable); without it, all active ones
+                            --check            does not write: exit code 1 if there are unreviewed changes
+          context <ID>    Requirement context for an agent: statement, criteria, status and how to mark the work.
+          scaffold-tests  xUnit skeletons for criteria without tests.
+                            --project <dir>    folder of the test project (required)
+                            --requirement <ID> only that requirement
+                            --namespace <ns>   root namespace of the test project
+          mcp             MCP server over stdio for agents (Claude Code, VS Code, Agent Framework...).
+          import speckit <path>
+                          Imports GitHub Spec Kit specs (a spec.md or a specs/ folder).
+                            --prefix <P>       ID prefix (default: initials of the feature, e.g. PA1)
+                            --out <file>       output (single feature only); default spectrace.spec.md next to the source
+          import openspec <path>
+                          Imports OpenSpec specs (openspec/, openspec/specs or a spec.md).
+                            --prefix <P>       ID prefix (default: the capability name, e.g. AUTH)
+                            --out <file>       output (single capability only); default <specs>/<capability>.spec.md
+                          Common: --status approved|proposed (status of imported items with criteria), --dry-run
+          init            Creates spectrace.json, specs/example.spec.md, the agent skill and .mcp.json.
+                            --skills-dir <dir> skills folder (default .claude/skills)
 
-        Opciones comunes:
-          --root <dir>      carpeta desde la que buscar spectrace.json (por defecto la actual)
+        Common options:
+          --root <dir>      folder to search spectrace.json from (default: the current one)
         """;
 
     public static int Run(string[] args)
@@ -73,7 +73,7 @@ internal static class Cli
                         "json" => Reports.Json(model),
                         "github" => Reports.GitHub(model, repoRoot),
                         "md" or null => Reports.Markdown(model, opts.Get("link-base")),
-                        var other => throw new ArgumentException($"Formato desconocido '{other}'. Usa md, json o github."),
+                        var other => throw new ArgumentException($"Unknown format '{other}'. Use md, json or github."),
                     };
                     Write(text, opts.Get("out"));
                     var gaps = model.Requirements.Count(r => r.HasGap) + model.UnknownLinks.Count;
@@ -83,27 +83,27 @@ internal static class Cli
 
                 case "context":
                 {
-                    var id = opts.Positional.FirstOrDefault() ?? throw new ArgumentException("Falta el ID del requisito: dotnet spectrace context ORD-001");
+                    var id = opts.Positional.FirstOrDefault() ?? throw new ArgumentException("Missing requirement ID: dotnet spectrace context ORD-001");
                     Console.WriteLine(Reports.Context(TraceScanner.Scan(config), id));
                     return 0;
                 }
 
                 case "scaffold-tests":
                 {
-                    var project = opts.Get("project") ?? throw new ArgumentException("Falta --project <carpeta del proyecto de tests>");
+                    var project = opts.Get("project") ?? throw new ArgumentException("Missing --project <test project folder>");
                     var files = Scaffolder.ScaffoldTests(TraceScanner.Scan(config), Path.GetFullPath(project),
                         opts.Get("requirement"), opts.Get("namespace"));
                     Console.WriteLine(files.Count == 0
-                        ? "No hay criterios sin test (o los ficheros ya existen)."
-                        : "Creados:\n" + string.Join("\n", files.Select(f => "  " + TraceScanner.Relative(config.Root, f))));
+                        ? "No criteria without tests (or the files already exist)."
+                        : "Created:\n" + string.Join("\n", files.Select(f => "  " + TraceScanner.Relative(config.Root, f))));
                     return 0;
                 }
 
                 case "mcp":
                 {
-                    // stdout es el canal del protocolo: todo lo demás va a stderr.
+                    // stdout is the protocol channel: everything else goes to stderr.
                     var server = new SpecTrace.Tool.Mcp.McpServer(config, Console.Error);
-                    Console.Error.WriteLine($"[spectrace mcp] raíz: {config.Root}");
+                    Console.Error.WriteLine($"[spectrace mcp] root: {config.Root}");
                     server.RunOnStdioAsync().GetAwaiter().GetResult();
                     return 0;
                 }
@@ -118,7 +118,7 @@ internal static class Cli
                     return Init(opts);
 
                 default:
-                    Console.Error.WriteLine($"Comando desconocido: {args[0]}\n");
+                    Console.Error.WriteLine($"Unknown command: {args[0]}\n");
                     Console.WriteLine(Usage);
                     return 1;
             }
@@ -148,17 +148,17 @@ internal static class Cli
         Create(SpecTraceConfig.FileName, "{\n  \"specs\": \"specs\",\n  \"sources\": [\"src\", \"tests\"]\n}\n");
         Create(Path.Combine("specs", "example.spec.md"), Template("example.spec.md"));
         Create(Path.GetRelativePath(root, Path.Combine(skillsDir, "spectrace", "SKILL.md")), Template("SKILL.md"));
-        // Registro del servidor MCP para agentes que leen .mcp.json en la raíz del proyecto (por ejemplo Claude Code).
+        // MCP server registration for agents that read .mcp.json at the project root (for example Claude Code).
         Create(".mcp.json", "{\n  \"mcpServers\": {\n    \"spectrace\": {\n      \"command\": \"dotnet\",\n      \"args\": [\"spectrace\", \"mcp\"]\n    }\n  }\n}\n");
 
-        Console.WriteLine(created.Count == 0 ? "Todo estaba ya creado." : "Creados:\n" + string.Join("\n", created.Select(c => "  " + c)));
-        Console.WriteLine("\nSiguiente paso: añade el paquete a tus proyectos con  dotnet add package SpecTrace");
+        Console.WriteLine(created.Count == 0 ? "Everything already exists." : "Created:\n" + string.Join("\n", created.Select(c => "  " + c)));
+        Console.WriteLine("\nNext step: add the package to your projects with  dotnet add package SpecTrace --prerelease");
         return 0;
     }
 
     /// <summary>
-    /// Registra en spectrace.lock la huella actual de los requisitos revisados. Es un acto humano: confirma que el código
-    /// y los tests están al día con el texto de la spec, igual que aprobar una PR.
+    /// Records in spectrace.lock the current fingerprint of the reviewed requirements. It is a human act: it confirms that
+    /// the code and the tests are up to date with the spec text, just like approving a pull request.
     /// </summary>
     private static int Lock(Options opts, SpecTraceConfig config)
     {
@@ -170,19 +170,19 @@ internal static class Cli
             var drifted = model.Requirements.Where(t => t.HasDrift).ToList();
             if (!model.HasLock)
             {
-                Console.WriteLine("No hay spectrace.lock: ejecuta `dotnet spectrace lock` para empezar a detectar cambios.");
+                Console.WriteLine("No spectrace.lock: run `dotnet spectrace lock` to start detecting changes.");
                 return 0;
             }
 
             foreach (var t in drifted)
             {
                 var what = new List<string>();
-                if (t.CodeNeedsReview) what.Add("enunciado");
+                if (t.CodeNeedsReview) what.Add("statement");
                 what.AddRange(t.CriteriaNeedingReview.Select(c => c.Id));
-                Console.WriteLine($"{t.Requirement.Id}: cambió {string.Join(", ", what)}");
+                Console.WriteLine($"{t.Requirement.Id}: changed {string.Join(", ", what)}");
             }
 
-            Console.WriteLine(drifted.Count == 0 ? "Sin cambios pendientes de revisar." : $"{drifted.Count} requisito(s) con cambios sin revisar.");
+            Console.WriteLine(drifted.Count == 0 ? "No changes pending review." : $"{drifted.Count} requirement(s) with unreviewed changes.");
             return drifted.Count == 0 ? 0 : 1;
         }
 
@@ -197,8 +197,8 @@ internal static class Cli
             foreach (var id in ids)
             {
                 var t = model.Requirements.FirstOrDefault(r => string.Equals(r.Requirement.Id, id, StringComparison.OrdinalIgnoreCase))
-                    ?? throw new ArgumentException($"No existe el requisito '{id}'.");
-                if (t.Requirement.IsDeprecated) throw new ArgumentException($"{t.Requirement.Id} está deprecated: no se registra.");
+                    ?? throw new ArgumentException($"Requirement '{id}' does not exist.");
+                if (t.Requirement.IsDeprecated) throw new ArgumentException($"{t.Requirement.Id} is deprecated: it is not recorded.");
                 if (current.Find(t.Requirement.Id) == null) added++;
                 else if (t.DriftInfo.Any) changed++;
                 updated = updated.With(SpecTrace.Specs.SpecFingerprint.Entry(t.Requirement));
@@ -206,7 +206,7 @@ internal static class Cli
         }
         else
         {
-            // Todos los requisitos activos; los retirados o en borrador salen del fichero.
+            // All active requirements; retired and draft ones are dropped from the file.
             var active = model.Requirements.Where(t => t.Requirement.IsEnforced).ToList();
             added = active.Count(t => current.Find(t.Requirement.Id) == null);
             changed = active.Count(t => t.DriftInfo.IsLocked && t.DriftInfo.Any);
@@ -215,10 +215,10 @@ internal static class Cli
         }
 
         File.WriteAllText(path, updated.Render());
-        Console.WriteLine($"{SpecTrace.Specs.SpecLock.FileName}: {updated.Count} requisitos ({added} nuevos, {changed} actualizados, {removed} retirados).");
+        Console.WriteLine($"{SpecTrace.Specs.SpecLock.FileName}: {updated.Count} requirements ({added} new, {changed} updated, {removed} removed).");
         if (ids.Count == 0 && changed > 0)
         {
-            Console.WriteLine("Aviso: se han dado por revisados cambios pendientes. Si no era la intención, deshazlo con git.");
+            Console.WriteLine("Note: pending changes were marked as reviewed. If that was not intended, undo it with git.");
         }
 
         return 0;
@@ -227,11 +227,11 @@ internal static class Cli
     private static int Import(Options opts, SpecTraceConfig config)
     {
         var kind = opts.Positional.ElementAtOrDefault(0)
-            ?? throw new ArgumentException("Uso: dotnet spectrace import speckit|openspec <ruta>");
+            ?? throw new ArgumentException("Usage: dotnet spectrace import speckit|openspec <path>");
         var source = opts.Positional.ElementAtOrDefault(1)
-            ?? throw new ArgumentException($"Falta la ruta: dotnet spectrace import {kind} <ruta>");
+            ?? throw new ArgumentException($"Missing path: dotnet spectrace import {kind} <path>");
         var status = opts.Get("status") ?? SpecTrace.Specs.SpecStatus.Approved;
-        if (status is not ("approved" or "proposed")) throw new ArgumentException("--status debe ser approved o proposed.");
+        if (status is not ("approved" or "proposed")) throw new ArgumentException("--status must be approved or proposed.");
         var dryRun = opts.Has("dry-run");
         var outOption = opts.Get("out");
 
@@ -241,8 +241,8 @@ internal static class Cli
             case "speckit":
             {
                 var sources = SpecTrace.Tool.Import.SpecKitImporter.FindSources(source).ToList();
-                if (sources.Count == 0) throw new ArgumentException($"No hay ningún spec.md de Spec Kit en '{source}'.");
-                if (outOption != null && sources.Count > 1) throw new ArgumentException("--out solo se puede usar con una feature.");
+                if (sources.Count == 0) throw new ArgumentException($"No Spec Kit spec.md found in '{source}'.");
+                if (outOption != null && sources.Count > 1) throw new ArgumentException("--out can only be used with a single feature.");
                 foreach (var file in sources)
                 {
                     var output = Path.GetFullPath(outOption ?? Path.Combine(Path.GetDirectoryName(file)!, "spectrace.spec.md"));
@@ -256,9 +256,9 @@ internal static class Cli
             case "openspec":
             {
                 var sources = SpecTrace.Tool.Import.OpenSpecImporter.FindSources(source).ToList();
-                if (sources.Count == 0) throw new ArgumentException($"No hay ningún spec.md de OpenSpec en '{source}'.");
-                if (outOption != null && sources.Count > 1) throw new ArgumentException("--out solo se puede usar con una capacidad.");
-                if (opts.Get("prefix") != null && sources.Count > 1) throw new ArgumentException("--prefix solo se puede usar con una capacidad.");
+                if (sources.Count == 0) throw new ArgumentException($"No OpenSpec spec.md found in '{source}'.");
+                if (outOption != null && sources.Count > 1) throw new ArgumentException("--out can only be used with a single capability.");
+                if (opts.Get("prefix") != null && sources.Count > 1) throw new ArgumentException("--prefix can only be used with a single capability.");
                 foreach (var (capability, file) in sources)
                 {
                     var output = Path.GetFullPath(outOption ?? Path.Combine(config.Root, config.Specs, capability + SpecTrace.Specs.SpecParser.FileSuffix));
@@ -270,14 +270,14 @@ internal static class Cli
             }
 
             default:
-                throw new ArgumentException($"Formato de importación desconocido '{kind}'. Usa speckit u openspec.");
+                throw new ArgumentException($"Unknown import format '{kind}'. Use speckit or openspec.");
         }
 
         foreach (var spec in specs)
         {
             var result = SpecTrace.Tool.Import.ImportWriter.Write(spec, dryRun);
-            Console.WriteLine($"{(dryRun ? "[simulación] " : "")}{TraceScanner.Relative(config.Root, result.OutputPath)}: " +
-                              $"{result.Requirements} requisitos ({result.Added} nuevos, {result.Kept} conservados) con prefijo {spec.SpecId}");
+            Console.WriteLine($"{(dryRun ? "[dry run] " : "")}{TraceScanner.Relative(config.Root, result.OutputPath)}: " +
+                              $"{result.Requirements} requirements ({result.Added} new, {result.Kept} kept) with prefix {spec.SpecId}");
         }
 
         return 0;
@@ -301,7 +301,7 @@ internal static class Cli
         }
 
         File.WriteAllText(path, text);
-        Console.WriteLine($"Informe escrito en {path}");
+        Console.WriteLine($"Report written to {path}");
     }
 
     private sealed class Options

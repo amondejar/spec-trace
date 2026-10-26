@@ -9,8 +9,8 @@ using SpecTrace.Tool.Authoring;
 namespace SpecTrace.Tool.Mcp;
 
 /// <summary>
-/// Herramientas MCP de SpecTrace. Cada llamada vuelve a leer specs y código, así que el agente siempre ve
-/// el estado actual del disco. Las rutas que recibe se confinan a la raíz del repositorio (spectrace.json).
+/// SpecTrace MCP tools. Every call re-reads specs and code, so the agent always sees
+/// the current state on disk. Paths it receives are confined to the repository root (spectrace.json).
 /// </summary>
 public sealed class SpecTraceTools
 {
@@ -22,61 +22,61 @@ public sealed class SpecTraceTools
         _config = config;
         _tools = new()
         {
-            ["list_requirements"] = (Define("list_requirements", "Listar requisitos",
-                "Lista los requisitos de las specs con su estado de trazabilidad: implementado, con tests y criterios cubiertos. " +
-                "Usa only_gaps=true para ver solo lo que falta.",
+            ["list_requirements"] = (Define("list_requirements", "List requirements",
+                "Lists the requirements in the specs with their traceability status: implemented, tested and criteria covered. " +
+                "Use only_gaps=true to see only what is missing.",
                 Schema(
-                    ("status", Str("Filtra por estado: draft, proposed, approved, implemented o deprecated.")),
-                    ("only_gaps", Bool("Si es true, solo requisitos activos sin implementar, sin tests o con criterios sin test.")),
-                    ("only_changed", Bool("Si es true, solo requisitos cuyo texto cambió después de revisarse (spectrace.lock)."))),
+                    ("status", Str("Filter by status: draft, proposed, approved, implemented or deprecated.")),
+                    ("only_gaps", Bool("If true, only active requirements that are not implemented, not tested or have criteria without tests.")),
+                    ("only_changed", Bool("If true, only requirements whose text changed after they were reviewed (spectrace.lock)."))),
                 readOnly: true), ListRequirements),
 
-            ["get_requirement"] = (Define("get_requirement", "Contexto de un requisito",
-                "Devuelve el enunciado, los criterios de aceptación con su estado, dónde está implementado, en qué proyectos va el " +
-                "código y con qué using, los ficheros relacionados y las marcas exactas ([Implements]/[Verifies]) que hay que usar. " +
-                "Llámala antes de implementar o probar un requisito.",
-                Schema(new[] { "id" }, ("id", Str("ID del requisito, por ejemplo ORD-002."))),
+            ["get_requirement"] = (Define("get_requirement", "Requirement context",
+                "Returns the statement, the acceptance criteria with their status, where it is implemented, which projects the code goes in " +
+                "and with which usings, the related files and the exact markers ([Implements]/[Verifies]) to use. " +
+                "Call it before implementing or testing a requirement.",
+                Schema(new[] { "id" }, ("id", Str("Requirement ID, for example ORD-002."))),
                 readOnly: true), GetRequirement),
 
-            ["get_code"] = (Define("get_code", "Leer código del repositorio",
-                "Devuelve el contenido de ficheros de código para adaptar una propuesta a los tipos reales en vez de suponerlos. " +
-                "Indica exactamente uno de: requirement_id (los ficheros que implementan y prueban el requisito o, si aún no tiene, " +
-                "los de otros requisitos de la misma spec), type (los ficheros donde se declara ese tipo) o path (un fichero). " +
-                "Solo lee ficheros .cs, .csproj y .md de las carpetas de código y de specs.",
+            ["get_code"] = (Define("get_code", "Read repository code",
+                "Returns the contents of code files so a change can use the real types instead of guessing them. " +
+                "Give exactly one of: requirement_id (the files that implement and test the requirement or, if it has none yet, " +
+                "those of other requirements in the same spec), type (the files that declare that type) or path (one file). " +
+                "Only reads .cs, .csproj and .md files in the source and spec folders.",
                 Schema(
-                    ("requirement_id", Str("ID del requisito, por ejemplo ORD-003.")),
-                    ("type", Str("Nombre de un tipo C#, por ejemplo Order u OrderService.")),
-                    ("path", Str("Ruta de un fichero, relativa a la raíz del repositorio."))),
+                    ("requirement_id", Str("Requirement ID, for example ORD-003.")),
+                    ("type", Str("Name of a C# type, for example Order or OrderService.")),
+                    ("path", Str("Path of a file, relative to the repository root."))),
                 readOnly: true), GetCode),
 
-            ["get_traceability_report"] = (Define("get_traceability_report", "Informe de trazabilidad",
-                "Informe completo requisito → código → test, en Markdown (por defecto) o JSON.",
-                Schema(("format", EnumOf("Formato del informe.", "md", "json"))),
+            ["get_traceability_report"] = (Define("get_traceability_report", "Traceability report",
+                "Full requirement → code → test report, in Markdown (default) or JSON.",
+                Schema(("format", EnumOf("Report format.", "md", "json"))),
                 readOnly: true), GetReport),
 
-            ["scaffold_tests"] = (Define("scaffold_tests", "Generar esqueletos de tests",
-                "Crea en <test_project>/Specs un fichero xUnit por requisito con un test (con Skip) por cada criterio sin test. " +
-                "No sobrescribe ficheros existentes. Hay que completar cada test y quitar el Skip para que cuente.",
+            ["scaffold_tests"] = (Define("scaffold_tests", "Generate test skeletons",
+                "Creates in <test_project>/Specs one xUnit file per requirement with a test (with Skip) for each criterion without a test. " +
+                "Does not overwrite existing files. Each test must be completed and its Skip removed for it to count.",
                 Schema(new[] { "test_project" },
-                    ("test_project", Str("Carpeta del proyecto de tests, relativa a la raíz del repositorio.")),
-                    ("requirement_id", Str("Solo este requisito. Si se omite, todos los que tengan criterios sin test."))),
+                    ("test_project", Str("Test project folder, relative to the repository root.")),
+                    ("requirement_id", Str("Only this requirement. If omitted, every requirement with criteria without tests."))),
                 readOnly: false), ScaffoldTests),
 
-            ["propose_requirement"] = (Define("propose_requirement", "Proponer un requisito",
-                "Añade un requisito nuevo con Status: proposed al final de una spec (*.spec.md dentro de la carpeta de specs). " +
-                "Úsala cuando la tarea pide comportamiento que ninguna spec describe; una persona debe aprobarlo después.",
+            ["propose_requirement"] = (Define("propose_requirement", "Propose a requirement",
+                "Appends a new requirement with Status: proposed to a spec (*.spec.md inside the specs folder). " +
+                "Use it when the task asks for behavior that no spec describes; a person must approve it afterwards.",
                 Schema(new[] { "spec_file", "title", "statement", "criteria" },
-                    ("spec_file", Str("Spec de destino, relativa a la carpeta de specs (por ejemplo orders.spec.md). Se crea si no existe.")),
-                    ("title", Str("Título corto del requisito.")),
-                    ("statement", Str("Enunciado, preferiblemente EARS: When/While/If ..., the system shall ...")),
+                    ("spec_file", Str("Target spec, relative to the specs folder (for example orders.spec.md). Created if it does not exist.")),
+                    ("title", Str("Short title of the requirement.")),
+                    ("statement", Str("Statement, preferably EARS: When/While/If ..., the system shall ...")),
                     ("criteria", new JsonObject
                     {
                         ["type"] = "array",
                         ["items"] = new JsonObject { ["type"] = "string" },
                         ["minItems"] = 1,
-                        ["description"] = "Criterios de aceptación en formato Given/When/Then, uno por elemento.",
+                        ["description"] = "Acceptance criteria in Given/When/Then form, one per item.",
                     }),
-                    ("id", Str("ID explícito. Si se omite, se usa el siguiente número del prefijo de la spec."))),
+                    ("id", Str("Explicit ID. If omitted, the next number for the spec's prefix is used."))),
                 readOnly: false), ProposeRequirement),
         };
     }
@@ -93,12 +93,12 @@ public sealed class SpecTraceTools
         }
         catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException or InvalidOperationException)
         {
-            // Errores de ejecución: van en el resultado (isError) para que el modelo pueda corregirse.
+            // Execution errors go in the result (isError) so the model can correct itself.
             return Text(ex.Message, isError: true);
         }
     }
 
-    // ---------- Herramientas ----------
+    // ---------- Tools ----------
 
     private JsonObject ListRequirements(JsonObject args)
     {
@@ -128,13 +128,13 @@ public sealed class SpecTraceTools
 
         var structured = new JsonObject { ["requirements"] = new JsonArray(items) };
         var summary = items.Length == 0
-            ? "No hay requisitos que cumplan el filtro."
+            ? "No requirements match the filter."
             : string.Join("\n", items.Select(i =>
                 $"{i!["id"]} [{i["status"]}] {i["title"]} — " +
-                $"{(i["implemented"]!.GetValue<bool>() ? "implementado" : "sin implementar")}, " +
-                $"criterios con test {i["criteria_covered"]}/{i["criteria_total"]}" +
-                (i["gap"]!.GetValue<bool>() ? " (hueco)" : "") +
-                (i["spec_changed"]!.GetValue<bool>() ? " (spec cambiada desde la última revisión)" : "")));
+                $"{(i["implemented"]!.GetValue<bool>() ? "implemented" : "not implemented")}, " +
+                $"criteria with tests {i["criteria_covered"]}/{i["criteria_total"]}" +
+                (i["gap"]!.GetValue<bool>() ? " (gap)" : "") +
+                (i["spec_changed"]!.GetValue<bool>() ? " (spec changed since the last review)" : "")));
 
         var result = Text(summary);
         result["structuredContent"] = structured;
@@ -159,7 +159,7 @@ public sealed class SpecTraceTools
         var requirementId = OptionalString(args, "requirement_id");
         if (new[] { path, type, requirementId }.Count(a => a != null) != 1)
         {
-            throw new ArgumentException("Indica exactamente uno de: requirement_id, type o path.");
+            throw new ArgumentException("Give exactly one of: requirement_id, type or path.");
         }
 
         List<string> files;
@@ -174,27 +174,27 @@ public sealed class SpecTraceTools
             files = TraceScanner.FindTypeFiles(_config, type).ToList();
             if (files.Count == 0)
             {
-                throw new ArgumentException($"No hay ningún tipo llamado '{type}' en {string.Join(", ", _config.Sources)}.");
+                throw new ArgumentException($"There is no type named '{type}' in {string.Join(", ", _config.Sources)}.");
             }
 
-            intro = $"Ficheros donde se declara `{type}`:\n\n";
+            intro = $"Files that declare `{type}`:\n\n";
         }
         else
         {
             var model = TraceScanner.Scan(_config);
             var trace = model.Requirements.FirstOrDefault(r => string.Equals(r.Requirement.Id, requirementId, StringComparison.OrdinalIgnoreCase))
-                ?? throw new ArgumentException($"No existe el requisito '{requirementId}'.");
+                ?? throw new ArgumentException($"Requirement '{requirementId}' does not exist.");
             var related = Reports.RelatedFiles(model, trace);
             var own = related.Where(f => f.Ids.Contains(trace.Requirement.Id, StringComparer.OrdinalIgnoreCase)).ToList();
             files = (own.Count > 0 ? own : related).Select(f => f.File).Distinct().ToList();
             if (files.Count == 0)
             {
-                throw new ArgumentException($"Ningún fichero trabaja todavía con requisitos de {trace.Requirement.FilePath}. Busca los tipos del dominio con type.");
+                throw new ArgumentException($"No file works with requirements from {trace.Requirement.FilePath} yet. Look up the domain types with type.");
             }
 
             intro = own.Count > 0
-                ? $"Ficheros que implementan o prueban {trace.Requirement.Id}:\n\n"
-                : $"{trace.Requirement.Id} aún no tiene código; estos ficheros trabajan con otros requisitos de la misma spec:\n\n";
+                ? $"Files that implement or test {trace.Requirement.Id}:\n\n"
+                : $"{trace.Requirement.Id} has no code yet; these files work with other requirements from the same spec:\n\n";
         }
 
         var sb = new System.Text.StringBuilder(intro);
@@ -203,18 +203,18 @@ public sealed class SpecTraceTools
         {
             if (shown == MaxFiles || sb.Length > MaxChars)
             {
-                sb.AppendLine($"(… {files.Count - shown} fichero(s) más: {string.Join(", ", files.Skip(shown))}. Pídelos con path.)");
+                sb.AppendLine($"(… {files.Count - shown} more file(s): {string.Join(", ", files.Skip(shown))}. Ask for them with path.)");
                 break;
             }
 
             var lines = File.ReadAllLines(Path.Combine(_config.Root, relative));
             var language = Path.GetExtension(relative).ToLowerInvariant() switch { ".cs" => "csharp", ".csproj" => "xml", _ => "markdown" };
-            sb.AppendLine($"### {relative} ({lines.Length} líneas)");
+            sb.AppendLine($"### {relative} ({lines.Length} lines)");
             sb.AppendLine();
             sb.AppendLine("```" + language);
             foreach (var line in lines.Take(MaxLinesPerFile)) sb.AppendLine(line);
             sb.AppendLine("```");
-            if (lines.Length > MaxLinesPerFile) sb.AppendLine($"(recortado: se muestran {MaxLinesPerFile} de {lines.Length} líneas)");
+            if (lines.Length > MaxLinesPerFile) sb.AppendLine($"(truncated: showing {MaxLinesPerFile} of {lines.Length} lines)");
             sb.AppendLine();
             shown++;
         }
@@ -223,8 +223,8 @@ public sealed class SpecTraceTools
     }
 
     /// <summary>
-    /// Un fichero que get_code puede leer: dentro de las carpetas de código o de specs, con extensión permitida
-    /// y fuera de bin/obj/.git. Así no se exponen secretos (.env, appsettings.*.json, claves...).
+    /// A file get_code may read: inside the source or spec folders, with an allowed extension
+    /// and outside bin/obj/.git. This keeps secrets (.env, appsettings.*.json, keys...) from being exposed.
     /// </summary>
     private string ReadableFile(string relative)
     {
@@ -232,21 +232,21 @@ public sealed class SpecTraceTools
         var allowedRoots = _config.Sources.Append(_config.Specs).Select(s => Path.GetFullPath(Path.Combine(_config.Root, s)));
         if (!allowedRoots.Any(r => IsUnder(full, r)))
         {
-            throw new ArgumentException($"'{relative}' no está en las carpetas de código ({string.Join(", ", _config.Sources)}) ni de specs ({_config.Specs}).");
+            throw new ArgumentException($"'{relative}' is not in the source folders ({string.Join(", ", _config.Sources)}) or the specs folder ({_config.Specs}).");
         }
 
         if (!CodeExtensions.Contains(Path.GetExtension(full).ToLowerInvariant()))
         {
-            throw new ArgumentException($"get_code solo lee ficheros {string.Join(", ", CodeExtensions)}.");
+            throw new ArgumentException($"get_code only reads {string.Join(", ", CodeExtensions)} files.");
         }
 
         var parts = full.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
         if (parts.Any(p => p is "bin" or "obj" or ".git"))
         {
-            throw new ArgumentException("get_code no lee ficheros de bin, obj ni .git.");
+            throw new ArgumentException("get_code does not read files in bin, obj or .git.");
         }
 
-        if (!File.Exists(full)) throw new ArgumentException($"No existe '{relative}'.");
+        if (!File.Exists(full)) throw new ArgumentException($"'{relative}' does not exist.");
         return full;
     }
 
@@ -259,28 +259,28 @@ public sealed class SpecTraceTools
     private JsonObject ScaffoldTests(JsonObject args)
     {
         var project = InsideRoot(RequiredString(args, "test_project"));
-        if (!Directory.Exists(project)) throw new ArgumentException($"No existe la carpeta '{RequiredString(args, "test_project")}'.");
+        if (!Directory.Exists(project)) throw new ArgumentException($"Folder '{RequiredString(args, "test_project")}' does not exist.");
 
         var files = Scaffolder.ScaffoldTests(TraceScanner.Scan(_config), project, OptionalString(args, "requirement_id"), ns: null);
         return Text(files.Count == 0
-            ? "No había criterios sin test (o los ficheros ya existían). No se ha creado nada."
-            : "Creados (completa cada test y quita el Skip):\n" + string.Join("\n", files.Select(f => "- " + TraceScanner.Relative(_config.Root, f))));
+            ? "There were no criteria without tests (or the files already existed). Nothing was created."
+            : "Created (complete each test and remove its Skip):\n" + string.Join("\n", files.Select(f => "- " + TraceScanner.Relative(_config.Root, f))));
     }
 
     private JsonObject ProposeRequirement(JsonObject args)
     {
         var specsDir = Path.GetFullPath(Path.Combine(_config.Root, _config.Specs));
         var relative = RequiredString(args, "spec_file");
-        if (!SpecParser.IsSpecFile(relative)) throw new ArgumentException($"'{relative}' debe terminar en {SpecParser.FileSuffix}.");
+        if (!SpecParser.IsSpecFile(relative)) throw new ArgumentException($"'{relative}' must end in {SpecParser.FileSuffix}.");
 
         var path = Path.GetFullPath(Path.Combine(specsDir, relative));
-        if (!IsUnder(path, specsDir)) throw new ArgumentException($"'{relative}' queda fuera de la carpeta de specs.");
+        if (!IsUnder(path, specsDir)) throw new ArgumentException($"'{relative}' is outside the specs folder.");
 
         var title = RequiredString(args, "title");
         var statement = RequiredString(args, "statement");
         var criteria = (args["criteria"] as JsonArray)?.Select(c => c?.GetValue<string>()).Where(c => !string.IsNullOrWhiteSpace(c)).Select(c => c!).ToList()
             ?? new List<string>();
-        if (criteria.Count == 0) throw new ArgumentException("Hace falta al menos un criterio de aceptación.");
+        if (criteria.Count == 0) throw new ArgumentException("At least one acceptance criterion is required.");
 
         var catalog = TraceScanner.Scan(_config).Catalog;
         var existing = File.Exists(path) ? SpecParser.Parse(path, File.ReadAllText(path)).Requirements.Select(r => r.Id).ToList() : new List<string>();
@@ -288,33 +288,33 @@ public sealed class SpecTraceTools
         var id = OptionalString(args, "id")?.Trim().ToUpperInvariant();
         if (id == null)
         {
-            if (existing.Count == 0) throw new ArgumentException("La spec está vacía: indica el ID del requisito (por ejemplo PAY-001).");
+            if (existing.Count == 0) throw new ArgumentException("The spec is empty: give the requirement ID (for example PAY-001).");
             id = SpecWriter.NextId(existing);
             while (catalog.TryGet(id, out _)) id = SpecWriter.NextId(existing.Append(id));
         }
 
-        if (!SpecWriter.IsValidId(id)) throw new ArgumentException($"'{id}' no es un ID válido (PREFIJO-123).");
-        if (catalog.TryGet(id, out var clash)) throw new ArgumentException($"El ID {id} ya existe en {clash.FilePath}.");
+        if (!SpecWriter.IsValidId(id)) throw new ArgumentException($"'{id}' is not a valid ID (PREFIX-123).");
+        if (catalog.TryGet(id, out var clash)) throw new ArgumentException($"ID {id} already exists in {clash.FilePath}.");
 
         var block = SpecWriter.Render(new RequirementDraft(id, title, SpecStatus.Proposed, statement, criteria,
-            Note: $"Propuesto por un agente el {DateTime.Now:yyyy-MM-dd}. Revísalo y cambia el estado a approved para exigirlo."));
+            Note: $"Proposed by an agent on {DateTime.Now:yyyy-MM-dd}. Review it and change the status to approved to enforce it."));
 
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         var current = File.Exists(path) ? File.ReadAllText(path) : string.Empty;
         var separator = current.Length == 0 ? "" : current.EndsWith("\n\n", StringComparison.Ordinal) ? "" : current.EndsWith("\n", StringComparison.Ordinal) ? "\n" : "\n\n";
         File.WriteAllText(path, current + separator + block);
 
-        return Text($"Añadido {id} ({title}) con Status: proposed en {TraceScanner.Relative(_config.Root, path)}. " +
-                    "No se exige hasta que alguien lo apruebe (Status: approved).");
+        return Text($"Added {id} ({title}) with Status: proposed to {TraceScanner.Relative(_config.Root, path)}. " +
+                    "It is not enforced until someone approves it (Status: approved).");
     }
 
-    // ---------- Utilidades ----------
+    // ---------- Helpers ----------
 
     private string InsideRoot(string relative)
     {
         var root = Path.GetFullPath(_config.Root);
         var full = Path.GetFullPath(Path.Combine(root, relative));
-        if (!IsUnder(full, root)) throw new ArgumentException($"'{relative}' queda fuera del repositorio.");
+        if (!IsUnder(full, root)) throw new ArgumentException($"'{relative}' is outside the repository.");
         return full;
     }
 
@@ -325,7 +325,7 @@ public sealed class SpecTraceTools
     }
 
     private static string RequiredString(JsonObject args, string name) =>
-        OptionalString(args, name) ?? throw new ArgumentException($"Falta el argumento '{name}'.");
+        OptionalString(args, name) ?? throw new ArgumentException($"Missing argument '{name}'.");
 
     private static string? OptionalString(JsonObject args, string name) =>
         args[name] is JsonValue v && v.TryGetValue<string>(out var s) && !string.IsNullOrWhiteSpace(s) ? s : null;

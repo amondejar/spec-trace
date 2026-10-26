@@ -1,70 +1,70 @@
 ---
 name: spectrace
-description: Implementa o modifica funcionalidad de este repositorio partiendo de las specs en specs/*.spec.md, dejando trazabilidad con [Implements] y [Verifies]. Úsala siempre que la tarea mencione un requisito (ORD-001, PAY-API-12...), una spec o un criterio de aceptación, o cuando vayas a añadir comportamiento nuevo.
+description: Implements or changes functionality in this repository starting from the specs in specs/*.spec.md, leaving traceability with [Implements] and [Verifies]. Use it whenever the task mentions a requirement (ORD-001, PAY-API-12...), a spec or an acceptance criterion, or when you are about to add new behavior.
 ---
 
-# Trabajar con SpecTrace
+# Working with SpecTrace
 
-Este repositorio sigue Spec-Driven Development. Las specs en `specs/*.spec.md` son la fuente de verdad;
-el código y los tests declaran qué requisito implementan y qué criterio verifican, y el compilador
-lo comprueba (diagnósticos `ST0001`–`ST0009`).
+This repository follows Spec-Driven Development. The specs in `specs/*.spec.md` are the source of truth;
+code and tests declare which requirement they implement and which criterion they verify, and the compiler
+checks it (diagnostics `ST0001`–`ST0011`).
 
-## Antes de escribir código
+## Before writing code
 
-1. Localiza el requisito. Si la tarea no da un ID, busca en `specs/` el que corresponde.
-   Si no existe ninguno, **no inventes comportamiento**: propone primero el requisito en la spec
-   (ID nuevo, enunciado EARS, criterios `AC-n`, `Status: proposed`) y pide confirmación.
-2. Carga su contexto. Si tienes el servidor MCP `spectrace` conectado, usa sus herramientas:
+1. Find the requirement. If the task gives no ID, look in `specs/` for the one that matches.
+   If there is none, **do not invent behavior**: first propose the requirement in the spec
+   (new ID, EARS statement, `AC-n` criteria, `Status: proposed`) and ask for confirmation.
+2. Load its context. If the `spectrace` MCP server is connected, use its tools:
 
-   | Herramienta | Para qué |
+   | Tool | What for |
    | --- | --- |
-   | `get_requirement` | Enunciado, criterios con su estado, dónde va el código (proyecto y `using`) y las marcas exactas |
-   | `get_code` | Leer el código relacionado (`requirement_id`), dónde se declara un tipo (`type`) o un fichero (`path`) |
-   | `list_requirements` | Qué requisitos hay; con `only_gaps: true`, solo lo que falta |
-   | `propose_requirement` | Añadir a la spec un requisito nuevo en estado `proposed` |
-   | `scaffold_tests` | Crear esqueletos de tests para los criterios sin test |
+   | `get_requirement` | Statement, criteria with their status, where the code goes (project and `using`) and the exact markers |
+   | `get_code` | Read the related code (`requirement_id`), where a type is declared (`type`) or one file (`path`) |
+   | `list_requirements` | Which requirements exist; with `only_gaps: true`, only what is missing |
+   | `propose_requirement` | Add a new requirement to a spec with status `proposed` |
+   | `scaffold_tests` | Create test skeletons for criteria without tests |
 
-   Sin MCP, el equivalente en la terminal es:
+   Without MCP, the terminal equivalent is:
 
    ```bash
    dotnet spectrace context <ID>
    ```
 
-## Al implementar
+## While implementing
 
-- Lee antes el código relacionado y reutiliza sus tipos: no supongas propiedades, setters ni constructores.
-- Marca el tipo o miembro que implementa el requisito con `[Implements(Requirements.<ID_CON_GUIONES_BAJOS>)]`.
-  Usa las constantes generadas (`Requirements`, `AcceptanceCriteria`), nunca cadenas sueltas.
-- Escribe un test por criterio de aceptación con
-  `[Verifies(Requirements.<ID>, AcceptanceCriteria.<ID>.AC_n)]`. El nombre del test describe el criterio.
-- Si necesitas esqueletos: `dotnet spectrace scaffold-tests --project <carpeta del proyecto de tests> --requirement <ID>`.
-  Los tests generados llevan `Skip`; quítalo al implementarlos (un test saltado no cuenta como cobertura).
-- No cambies el texto de un requisito `approved` para que encaje con tu código. Si la spec es ambigua
-  o incorrecta, dilo y propone el cambio de la spec por separado.
+- Read the related code first and reuse its types: do not assume properties, setters or constructors.
+- Mark the type or member that implements the requirement with `[Implements(Requirements.<ID_WITH_UNDERSCORES>)]`.
+  Use the generated constants (`Requirements`, `AcceptanceCriteria`), never bare strings.
+- Write one test per acceptance criterion with
+  `[Verifies(Requirements.<ID>, AcceptanceCriteria.<ID>.AC_n)]`. The test name describes the criterion.
+- If you need skeletons: `dotnet spectrace scaffold-tests --project <test project folder> --requirement <ID>`.
+  Generated tests have `Skip`; remove it when you implement them (a skipped test does not count as coverage).
+- Do not change the text of an `approved` requirement to fit your code. If the spec is ambiguous
+  or wrong, say so and propose the spec change separately.
 
-## Si la spec cambió (ST0010 / ST0011)
+## If the spec changed (ST0010 / ST0011)
 
-Si el build avisa con `ST0010` o `ST0011`, o `list_requirements` con `only_changed: true` devuelve el requisito,
-su texto cambió después de la última revisión. Revisa el código o los tests que indica el aviso contra el texto
-nuevo y adáptalos. **No ejecutes `dotnet spectrace lock`**: registrar la revisión le corresponde a una persona.
-Dile qué has revisado y qué has cambiado.
+If the build reports `ST0010` or `ST0011`, or `list_requirements` with `only_changed: true` returns the requirement,
+its text changed after the last review. Check the code or tests named in the warning against the new text
+and update them. **Do not run `dotnet spectrace lock`**: recording the review is a person's job.
+Tell them what you reviewed and what you changed.
 
-## Para terminar
+## To finish
 
-1. `dotnet build`: no debe quedar ningún `ST0001`, `ST0002`, `ST0003`, `ST0004` ni `ST0005` del requisito.
-2. `dotnet test`: todos los tests del requisito en verde.
-3. `dotnet spectrace report` (o `list_requirements` con `only_gaps: true`): el requisito ya no aparece como hueco.
-4. En el resumen del cambio, enumera los requisitos y criterios cubiertos por ID.
+1. `dotnet build`: no `ST0001`, `ST0002`, `ST0003`, `ST0004` or `ST0005` may remain for the requirement.
+2. `dotnet test`: all the requirement's tests pass.
+3. `dotnet spectrace report` (or `list_requirements` with `only_gaps: true`): the requirement no longer shows as a gap.
+4. In the change summary, list the requirements and criteria covered, by ID.
 
-## Referencia rápida de diagnósticos
+## Diagnostics quick reference
 
-| ID | Qué significa | Qué hacer |
+| ID | Meaning | What to do |
 | --- | --- | --- |
-| ST0001 | ID de requisito inexistente | Corrige el ID o añade el requisito a la spec |
-| ST0002 | Criterio inexistente | Usa uno de los `AC-n` del requisito |
-| ST0003 | Requisito aprobado sin implementar | Implementa y marca con `[Implements]` |
-| ST0004 | Implementado sin ningún test | Añade tests con `[Verifies]` |
-| ST0005 | Criterio sin test | Añade el test de ese criterio |
-| ST0006 | Requisito deprecated referenciado | Retira la referencia |
-| ST0010 | El enunciado cambió tras la última revisión | Revisa la implementación y avisa a una persona |
-| ST0011 | Un criterio cambió tras la última revisión | Revisa sus tests y avisa a una persona |
+| ST0001 | Requirement ID does not exist | Fix the ID or add the requirement to the spec |
+| ST0002 | Criterion does not exist | Use one of the requirement's `AC-n` |
+| ST0003 | Approved requirement not implemented | Implement it and mark it with `[Implements]` |
+| ST0004 | Implemented without any test | Add tests with `[Verifies]` |
+| ST0005 | Criterion without a test | Add the test for that criterion |
+| ST0006 | Deprecated requirement referenced | Remove the reference |
+| ST0010 | The statement changed after the last review | Review the implementation and tell a person |
+| ST0011 | A criterion changed after the last review | Review its tests and tell a person |

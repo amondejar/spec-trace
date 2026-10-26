@@ -6,25 +6,25 @@ namespace SpecTrace.Tests
 {
     public class AnalyzerTests
     {
-        private const string Spec = @"# Pedidos
+        private const string Spec = @"# Orders
 
-## ORD-001: Crear pedido
+## ORD-001: Create order
 When the customer submits a cart, the system shall create an order.
 
 - AC-1: Given 2 lines, then the order has 2 lines.
 - AC-2: Given an empty cart, then it is rejected.
 
-## ORD-002: Cancelar pedido
+## ORD-002: Cancel order
 Status: approved
 
 While an order is Pending, when it is cancelled, the system shall mark it Cancelled.
 
 - AC-1: Given a Pending order, then it is Cancelled.
 
-## ORD-003: Exportar XML
+## ORD-003: Export XML
 Status: deprecated
 
-## ORD-004: Notificar
+## ORD-004: Notify
 Status: draft
 
 When the state changes, the system shall send an email.
@@ -209,7 +209,7 @@ public class OrderTests
         [Fact]
         public void Approved_requirement_without_criteria_reports_ST0008()
         {
-            var spec = Spec + "\n## ORD-010: Sin criterios\nThe system shall do something.\n";
+            var spec = Spec + "\n## ORD-010: No criteria\nThe system shall do something.\n";
             const string source = Implementation + @"
 public class Extra { [SpecTrace.Implements(""ORD-010"")] public void M() { } }";
 
@@ -222,7 +222,7 @@ public class Extra { [SpecTrace.Implements(""ORD-010"")] public void M() { } }";
         [Fact]
         public void Nothing_happens_without_specs_reference()
         {
-            var result = TestHarness.Run("public class Plain { }", "# Sin requisitos\n");
+            var result = TestHarness.Run("public class Plain { }", "# No requirements\n");
 
             Assert.Empty(result.SpecTrace());
             Assert.Empty(result.Generated);

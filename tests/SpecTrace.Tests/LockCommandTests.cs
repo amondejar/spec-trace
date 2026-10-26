@@ -9,18 +9,18 @@ using Xunit;
 
 namespace SpecTrace.Tests
 {
-    /// <summary>v0.4 en la CLI y el servidor MCP: dotnet spectrace lock, informe y herramientas con cambios en la spec.</summary>
+    /// <summary>v0.4 in the CLI and the MCP server: dotnet spectrace lock, report and tools with spec changes.</summary>
     public class LockCommandTests : IDisposable
     {
-        private const string Spec = @"# Pedidos
+        private const string Spec = @"# Orders
 
-## ORD-001: Crear pedido
+## ORD-001: Create order
 The system shall create orders.
 
 - AC-1: Given 2 lines, then 2 lines.
 - AC-2: Given an empty cart, then it is rejected.
 
-## ORD-002: Cancelar pedido
+## ORD-002: Cancel order
 The system shall cancel orders.
 
 - AC-1: Given Pending, then Cancelled.
@@ -88,7 +88,7 @@ public class OrderTests
             Assert.False(model.HasLock);
             Assert.DoesNotContain(model.Requirements, t => t.HasDrift);
             Assert.Equal(0, Cli("lock", "--check"));
-            Assert.Contains("Sin `spectrace.lock`", Reports.Markdown(model));
+            Assert.Contains("No `spectrace.lock`", Reports.Markdown(model));
         }
 
         [Fact]
@@ -107,8 +107,8 @@ public class OrderTests
             Assert.Equal(0, Cli("report"));
 
             var md = Reports.Markdown(model);
-            Assert.Contains("- Cambios en la spec sin revisar: **1**", md);
-            Assert.Contains("→ revisa `OrderTests.Empty_rejected`", md);
+            Assert.Contains("- Unreviewed spec changes: **1**", md);
+            Assert.Contains("→ review `OrderTests.Empty_rejected`", md);
             Assert.Contains("ST0011", Reports.GitHub(model, _root));
             var json = JsonNode.Parse(Reports.Json(model))!;
             var drift = json["requirements"]!.AsArray().Single(r => r!["id"]!.GetValue<string>() == "ORD-001")!["drift"]!;
@@ -154,9 +154,9 @@ public class OrderTests
 
             var context = server.Handle("{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"get_requirement\",\"arguments\":{\"id\":\"ORD-002\"}}}")!
                 ["result"]!["content"]![0]!["text"]!.GetValue<string>();
-            Assert.Contains("## Cambios desde la última revisión", context);
-            Assert.Contains("El enunciado cambió: revisa que `OrderService.Cancel`", context);
-            Assert.Contains("No lo ejecutes tú sin su visto bueno", context);
+            Assert.Contains("## Changes since the last review", context);
+            Assert.Contains("The statement changed: check that `OrderService.Cancel`", context);
+            Assert.Contains("Do not run it yourself without their approval", context);
         }
     }
 }

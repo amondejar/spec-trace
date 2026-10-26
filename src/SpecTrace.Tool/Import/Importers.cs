@@ -8,14 +8,14 @@ using SpecTrace.Tool.Authoring;
 
 namespace SpecTrace.Tool.Import;
 
-/// <summary>Un fichero *.spec.md que va a escribir un importador.</summary>
+/// <summary>A *.spec.md file that an importer is going to write.</summary>
 public sealed record ImportedSpec(string OutputPath, string SpecId, string Title, string Source, IReadOnlyList<RequirementDraft> Requirements);
 
 public sealed record ImportResult(string OutputPath, int Requirements, int Added, int Kept);
 
 /// <summary>
-/// Reglas comunes al reimportar: la fuente manda en títulos y textos; el fichero de SpecTrace manda en los estados
-/// (alguien pudo aprobar o retirar un requisito) y en los criterios añadidos a mano a requisitos que la fuente no detalla.
+/// Common rules when reimporting: the source wins for titles and text; the SpecTrace file wins for statuses
+/// (someone may have approved or deprecated a requirement) and for criteria added by hand to requirements the source does not detail.
 /// </summary>
 public static class ImportWriter
 {
@@ -43,8 +43,8 @@ public static class ImportWriter
             }
         }
 
-        var note = $"Importado de `{spec.Source}` con `dotnet spectrace import`. Edita la fuente y vuelve a importar: " +
-                   "se conservan los IDs, los estados y los criterios que añadas aquí a requisitos sin criterios.";
+        var note = $"Imported from `{spec.Source}` with `dotnet spectrace import`. Edit the source and import again: " +
+                   "IDs, statuses and any criteria you add here to requirements without criteria are kept.";
         if (!dryRun)
         {
             Directory.CreateDirectory(Path.GetDirectoryName(spec.OutputPath)!);
@@ -63,14 +63,14 @@ public static class ImportWriter
         plain = Regex.Replace(plain, @"^(The\s+)?(System|Users?)\s+(MUST|SHALL|SHOULD)(\s+be\s+able\s+to)?\s+", "", RegexOptions.IgnoreCase);
         var parts = plain.TrimEnd('.').Split(' ', StringSplitOptions.RemoveEmptyEntries);
         var title = string.Join(' ', parts.Take(words)) + (parts.Length > words ? "…" : "");
-        return title.Length > 0 ? char.ToUpperInvariant(title[0]) + title[1..] : "Sin título";
+        return title.Length > 0 ? char.ToUpperInvariant(title[0]) + title[1..] : "Untitled";
     }
 }
 
 /// <summary>
-/// Importa specs de GitHub Spec Kit (<c>specs/NNN-feature/spec.md</c>).
-/// User stories → requisitos con sus Acceptance Scenarios como criterios.
-/// Functional Requirements (FR-NNN) → requisitos proposed (Spec Kit no les da criterios propios).
+/// Imports specs from GitHub Spec Kit (<c>specs/NNN-feature/spec.md</c>).
+/// User stories → requirements with their Acceptance Scenarios as criteria.
+/// Functional Requirements (FR-NNN) → proposed requirements (Spec Kit gives them no criteria of their own).
 /// </summary>
 public static class SpecKitImporter
 {
@@ -110,7 +110,7 @@ public static class SpecKitImporter
             var us = UserStory.Match(line);
             if (us.Success)
             {
-                // Descripción: el texto entre el encabezado y el primer bloque en negrita (**Why this priority**, ...).
+                // Description: the text between the heading and the first bold block (**Why this priority**, ...).
                 var description = new List<string>();
                 var scenarios = new List<string>();
                 var inDescription = true;
@@ -136,16 +136,16 @@ public static class SpecKitImporter
 
                 var statement = ImportWriter.StripMarkdown(string.Join(" ", description));
                 var priority = us.Groups["p"].Success ? us.Groups["p"].Value.ToUpperInvariant() : null;
-                if (priority != null) statement = (statement.Length > 0 ? statement + " " : "") + $"(Prioridad {priority})";
+                if (priority != null) statement = (statement.Length > 0 ? statement + " " : "") + $"(Priority {priority})";
                 var unclear = statement.Contains("NEEDS CLARIFICATION", StringComparison.OrdinalIgnoreCase) || scenarios.Any(s => s.Contains("NEEDS CLARIFICATION", StringComparison.OrdinalIgnoreCase));
 
                 drafts.Add(new RequirementDraft(
                     $"{prefix}-US-{us.Groups["n"].Value}",
                     ImportWriter.StripMarkdown(us.Groups["t"].Value),
                     unclear || scenarios.Count == 0 ? SpecStatus.Proposed : status,
-                    statement.Length > 0 ? statement : "(sin descripción en la spec de origen)",
+                    statement.Length > 0 ? statement : "(no description in the source spec)",
                     scenarios,
-                    unclear ? "La spec de origen tiene puntos [NEEDS CLARIFICATION]: resuélvelos antes de aprobarlo." : null));
+                    unclear ? "The source spec has [NEEDS CLARIFICATION] markers: resolve them before approving it." : null));
                 i = j - 1;
                 continue;
             }
@@ -160,7 +160,7 @@ public static class SpecKitImporter
                     SpecStatus.Proposed,
                     body,
                     Array.Empty<string>(),
-                    "Requisito funcional de Spec Kit sin criterios propios: añade criterios (- AC-1: ...) y apruébalo para exigirlo."));
+                    "Spec Kit functional requirement without criteria of its own: add criteria (- AC-1: ...) and approve it to enforce it."));
             }
         }
 
@@ -182,9 +182,9 @@ public static class SpecKitImporter
 }
 
 /// <summary>
-/// Importa specs de OpenSpec (<c>openspec/specs/&lt;capability&gt;/spec.md</c>).
-/// Cada "### Requirement:" es un requisito; cada "#### Scenario:" un criterio de aceptación.
-/// OpenSpec no usa IDs: se asignan por orden y se reutilizan por título al reimportar.
+/// Imports specs from OpenSpec (<c>openspec/specs/&lt;capability&gt;/spec.md</c>).
+/// Each "### Requirement:" is a requirement; each "#### Scenario:" an acceptance criterion.
+/// OpenSpec has no IDs: they are assigned in order and reused by title when reimporting.
 /// </summary>
 public static class OpenSpecImporter
 {
@@ -205,7 +205,7 @@ public static class OpenSpecImporter
         var specsRoot = Directory.Exists(Path.Combine(path, "specs")) && !File.Exists(Path.Combine(path, "spec.md"))
             ? Path.Combine(path, "specs")
             : path;
-        // Solo las specs vigentes: openspec/changes/ contiene propuestas (deltas) aún no archivadas.
+        // Current specs only: openspec/changes/ holds proposals (deltas) that are not archived yet.
         return Directory.EnumerateFiles(specsRoot, "spec.md", SearchOption.AllDirectories)
             .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}changes{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
             .OrderBy(f => f, StringComparer.Ordinal)
@@ -271,7 +271,7 @@ public static class OpenSpecImporter
             i = j - 1;
         }
 
-        // IDs estables: se reutiliza el ID de un requisito con el mismo título en el fichero ya importado.
+        // Stable IDs: reuse the ID of a requirement with the same title in the already imported file.
         var previous = File.Exists(outputPath)
             ? SpecParser.Parse(outputPath, File.ReadAllText(outputPath)).Requirements
                 .GroupBy(r => r.Title, StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.First().Id, StringComparer.OrdinalIgnoreCase)
@@ -288,7 +288,7 @@ public static class OpenSpecImporter
             }
 
             drafts.Add(new RequirementDraft(id, reqTitle, criteria.Count == 0 ? SpecStatus.Proposed : status,
-                statement.Length > 0 ? statement : "(sin enunciado en la spec de origen)", criteria));
+                statement.Length > 0 ? statement : "(no statement in the source spec)", criteria));
         }
 
         return new ImportedSpec(outputPath, prefix, title, sourceLabel ?? sourcePath, drafts);

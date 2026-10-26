@@ -11,8 +11,8 @@ namespace SpecTrace.Tool;
 public static class Reports
 {
     /// <param name="linkBase">
-    /// Prefijo para convertir rutas en enlaces absolutos (p. ej. https://github.com/org/repo/blob/&lt;sha&gt;/samples/Orders/),
-    /// necesario cuando el informe se publica como comentario de una PR.
+    /// Prefix that turns paths into absolute links (e.g. https://github.com/org/repo/blob/&lt;sha&gt;/samples/Orders/),
+    /// needed when the report is posted as a pull request comment.
     /// </param>
     public static string Markdown(TraceModel model, string? linkBase = null)
     {
@@ -28,27 +28,27 @@ public static class Reports
         var criteria = active.Sum(r => r.Requirement.Criteria.Count);
         var covered = active.Sum(r => r.CoveredCriteria);
 
-        sb.AppendLine("# Informe de trazabilidad");
+        sb.AppendLine("# Traceability report");
         sb.AppendLine();
-        sb.AppendLine($"Generado el {DateTime.Now:yyyy-MM-dd HH:mm} por SpecTrace.");
+        sb.AppendLine($"Generated on {DateTime.Now:yyyy-MM-dd HH:mm} by SpecTrace.");
         sb.AppendLine();
-        sb.AppendLine($"- Requisitos activos: **{active.Count}** (approved o implemented)");
-        sb.AppendLine($"- Implementados: **{implemented}/{active.Count}**");
-        sb.AppendLine($"- Con al menos un test: **{verified}/{active.Count}**");
-        sb.AppendLine($"- Criterios de aceptación con test: **{covered}/{criteria}**");
+        sb.AppendLine($"- Active requirements: **{active.Count}** (approved or implemented)");
+        sb.AppendLine($"- Implemented: **{implemented}/{active.Count}**");
+        sb.AppendLine($"- With at least one test: **{verified}/{active.Count}**");
+        sb.AppendLine($"- Acceptance criteria with tests: **{covered}/{criteria}**");
         var drifted = model.Requirements.Where(t => t.HasDrift).ToList();
         sb.AppendLine(model.HasLock
-            ? $"- Cambios en la spec sin revisar: **{drifted.Count}**"
-            : "- Sin `spectrace.lock`: ejecuta `dotnet spectrace lock` para detectar cambios en la spec");
+            ? $"- Unreviewed spec changes: **{drifted.Count}**"
+            : "- No `spectrace.lock`: run `dotnet spectrace lock` to detect spec changes");
         sb.AppendLine();
-        sb.AppendLine("| Requisito | Estado | Implementado en | Verificado por | Criterios |");
+        sb.AppendLine("| Requirement | Status | Implemented in | Verified by | Criteria |");
         sb.AppendLine("| --- | --- | --- | --- | --- |");
 
         foreach (var t in model.Requirements)
         {
             var r = t.Requirement;
-            var impl = t.IsImplemented ? string.Join("<br>", t.Implementations.Select(Link)) : r.IsEnforced ? "**falta**" : "–";
-            var tests = t.IsVerified ? string.Join("<br>", t.Verifications.Select(v => Link(v) + (v.Criterion != null ? $" ({v.Criterion})" : ""))) : r.IsEnforced ? "**falta**" : "–";
+            var impl = t.IsImplemented ? string.Join("<br>", t.Implementations.Select(Link)) : r.IsEnforced ? "**missing**" : "–";
+            var tests = t.IsVerified ? string.Join("<br>", t.Verifications.Select(v => Link(v) + (v.Criterion != null ? $" ({v.Criterion})" : ""))) : r.IsEnforced ? "**missing**" : "–";
             var crit = r.Criteria.Count == 0 ? "–" : $"{t.CoveredCriteria}/{r.Criteria.Count}";
             sb.AppendLine($"| [{r.Id}]({Href(r.FilePath, r.Line + 1)}) {Escape(r.Title)} | {r.Status} | {impl} | {tests} | {crit} |");
         }
@@ -57,36 +57,36 @@ public static class Reports
         if (gaps.Count > 0)
         {
             sb.AppendLine();
-            sb.AppendLine("## Huecos");
+            sb.AppendLine("## Gaps");
             sb.AppendLine();
             foreach (var t in gaps)
             {
                 var r = t.Requirement;
-                if (!t.IsImplemented) sb.AppendLine($"- {r.Id} {r.Title}: sin implementación");
-                if (!t.IsVerified) sb.AppendLine($"- {r.Id} {r.Title}: sin tests");
-                else foreach (var c in t.UncoveredCriteria) sb.AppendLine($"- {r.Id} {c.Id}: sin test ({c.Text})");
+                if (!t.IsImplemented) sb.AppendLine($"- {r.Id} {r.Title}: not implemented");
+                if (!t.IsVerified) sb.AppendLine($"- {r.Id} {r.Title}: no tests");
+                else foreach (var c in t.UncoveredCriteria) sb.AppendLine($"- {r.Id} {c.Id}: no test ({c.Text})");
             }
         }
 
         if (drifted.Count > 0)
         {
             sb.AppendLine();
-            sb.AppendLine("## Cambios en la spec desde la última revisión");
+            sb.AppendLine("## Spec changes since the last review");
             sb.AppendLine();
-            sb.AppendLine("El texto cambió después de `dotnet spectrace lock`. Revisa lo indicado y, cuando esté al día, ejecuta `dotnet spectrace lock --requirement <ID>`.");
+            sb.AppendLine("The text changed after `dotnet spectrace lock`. Review what is listed and, once it is up to date, run `dotnet spectrace lock --requirement <ID>`.");
             sb.AppendLine();
             foreach (var t in drifted)
             {
                 var r = t.Requirement;
                 if (t.CodeNeedsReview)
                 {
-                    sb.AppendLine($"- [{r.Id}]({Href(r.FilePath, r.Line + 1)}) enunciado → revisa {string.Join(", ", t.Implementations.Select(Link))}");
+                    sb.AppendLine($"- [{r.Id}]({Href(r.FilePath, r.Line + 1)}) statement → review {string.Join(", ", t.Implementations.Select(Link))}");
                 }
 
                 foreach (var c in t.CriteriaNeedingReview)
                 {
                     var tests = t.Verifications.Where(v => v.Criterion == c.Id).Select(Link);
-                    sb.AppendLine($"- [{r.Id} {c.Id}]({Href(r.FilePath, c.Line + 1)}) \"{Escape(c.Text)}\" → revisa {string.Join(", ", tests)}");
+                    sb.AppendLine($"- [{r.Id} {c.Id}]({Href(r.FilePath, c.Line + 1)}) \"{Escape(c.Text)}\" → review {string.Join(", ", tests)}");
                 }
             }
         }
@@ -97,21 +97,21 @@ public static class Reports
         if (unlocked.Count > 0)
         {
             sb.AppendLine();
-            sb.AppendLine($"Sin revisión registrada en `spectrace.lock`: {string.Join(", ", unlocked.Select(t => t.Requirement.Id))}.");
+            sb.AppendLine($"No review recorded in `spectrace.lock`: {string.Join(", ", unlocked.Select(t => t.Requirement.Id))}.");
         }
 
         if (model.UnknownLinks.Count > 0)
         {
             sb.AppendLine();
-            sb.AppendLine("## Referencias a requisitos que no existen");
+            sb.AppendLine("## References to requirements that do not exist");
             sb.AppendLine();
-            foreach (var l in model.UnknownLinks) sb.AppendLine($"- `{l.RequirementId}` en {Link(l)}");
+            foreach (var l in model.UnknownLinks) sb.AppendLine($"- `{l.RequirementId}` in {Link(l)}");
         }
 
         if (model.Catalog.Issues.Count > 0)
         {
             sb.AppendLine();
-            sb.AppendLine("## Problemas en las specs");
+            sb.AppendLine("## Spec issues");
             sb.AppendLine();
             foreach (var i in model.Catalog.Issues) sb.AppendLine($"- {i.FilePath}:{i.Line + 1} {i.Message}");
         }
@@ -120,10 +120,10 @@ public static class Reports
     }
 
     /// <summary>
-    /// Comandos de flujo de trabajo de GitHub Actions (<c>::warning file=...,line=...::mensaje</c>):
-    /// GitHub los muestra como anotaciones en la pestaña "Files changed" de la PR.
+    /// GitHub Actions workflow commands (<c>::warning file=...,line=...::message</c>):
+    /// GitHub shows them as annotations in the pull request's "Files changed" tab.
     /// </summary>
-    /// <param name="baseDir">Raíz del repositorio (GITHUB_WORKSPACE); las rutas se expresan relativas a ella.</param>
+    /// <param name="baseDir">Repository root (GITHUB_WORKSPACE); paths are expressed relative to it.</param>
     public static string GitHub(TraceModel model, string baseDir)
     {
         var sb = new StringBuilder();
@@ -141,19 +141,19 @@ public static class Reports
             var r = t.Requirement;
             if (!t.IsImplemented)
             {
-                Emit("warning", r.FilePath, r.Line + 1, "ST0003", "Requisito sin implementar",
-                    $"{r.Id} ({r.Title}) está {r.Status} pero nada tiene [Implements(\"{r.Id}\")]");
+                Emit("warning", r.FilePath, r.Line + 1, "ST0003", "Requirement not implemented",
+                    $"{r.Id} ({r.Title}) is {r.Status} but nothing has [Implements(\"{r.Id}\")]");
             }
             else if (!t.IsVerified)
             {
-                Emit("warning", r.FilePath, r.Line + 1, "ST0004", "Requisito sin test",
-                    $"{r.Id} ({r.Title}) está implementado pero ningún test tiene [Verifies(\"{r.Id}\")]");
+                Emit("warning", r.FilePath, r.Line + 1, "ST0004", "Requirement without tests",
+                    $"{r.Id} ({r.Title}) is implemented but no test has [Verifies(\"{r.Id}\")]");
             }
             else
             {
                 foreach (var c in t.UncoveredCriteria)
                 {
-                    Emit("notice", r.FilePath, c.Line + 1, "ST0005", "Criterio sin test", $"{r.Id} {c.Id}: {c.Text}");
+                    Emit("notice", r.FilePath, c.Line + 1, "ST0005", "Criterion without a test", $"{r.Id} {c.Id}: {c.Text}");
                 }
             }
         }
@@ -163,28 +163,28 @@ public static class Reports
             var r = t.Requirement;
             if (t.CodeNeedsReview)
             {
-                Emit("warning", r.FilePath, r.Line + 1, "ST0010", "Enunciado cambiado",
-                    $"El enunciado de {r.Id} cambió después de la última revisión. Revisa {string.Join(", ", t.Implementations.Select(l => l.Symbol).Distinct())} y ejecuta: dotnet spectrace lock --requirement {r.Id}");
+                Emit("warning", r.FilePath, r.Line + 1, "ST0010", "Statement changed",
+                    $"The statement of {r.Id} changed after the last review. Review {string.Join(", ", t.Implementations.Select(l => l.Symbol).Distinct())} and run: dotnet spectrace lock --requirement {r.Id}");
             }
 
             foreach (var c in t.CriteriaNeedingReview)
             {
                 var tests = t.Verifications.Where(v => v.Criterion == c.Id).Select(v => v.Symbol).Distinct();
-                Emit("warning", r.FilePath, c.Line + 1, "ST0011", "Criterio cambiado",
-                    $"El criterio {c.Id} de {r.Id} cambió después de la última revisión. Revisa {string.Join(", ", tests)} y ejecuta: dotnet spectrace lock --requirement {r.Id}");
+                Emit("warning", r.FilePath, c.Line + 1, "ST0011", "Criterion changed",
+                    $"Criterion {c.Id} of {r.Id} changed after the last review. Review {string.Join(", ", tests)} and run: dotnet spectrace lock --requirement {r.Id}");
             }
         }
 
         foreach (var l in model.UnknownLinks)
         {
-            Emit("error", l.File, l.Line, "ST0001", "Requisito desconocido", $"'{l.RequirementId}' no existe en ninguna spec");
+            Emit("error", l.File, l.Line, "ST0001", "Unknown requirement", $"'{l.RequirementId}' does not exist in any spec");
         }
 
         foreach (var i in model.Catalog.Issues)
         {
             var dup = i.Kind is SpecIssueKind.DuplicateRequirement or SpecIssueKind.DuplicateCriterion;
             Emit(dup ? "error" : "warning", i.FilePath, i.Line + 1, dup ? "ST0007" : "ST0008",
-                dup ? "ID duplicado" : "Formato de la spec", i.Message);
+                dup ? "Duplicate ID" : "Spec format", i.Message);
         }
 
         return sb.ToString();
@@ -236,8 +236,8 @@ public static class Reports
     }
 
     /// <summary>
-    /// Contexto de un requisito pensado para un agente de código: qué hay que construir, qué existe ya,
-    /// qué falta y cómo dejar las marcas.
+    /// Requirement context for a coding agent: what to build, what already exists, what is missing and how to
+    /// mark the work.
     /// </summary>
     public static string Context(TraceModel model, string id)
     {
@@ -245,71 +245,71 @@ public static class Reports
         if (t == null)
         {
             var known = string.Join(", ", model.Requirements.Select(r => r.Requirement.Id));
-            throw new ArgumentException($"No existe el requisito '{id}'. Requisitos disponibles: {known}");
+            throw new ArgumentException($"Requirement '{id}' does not exist. Available requirements: {known}");
         }
 
         var r = t.Requirement;
         var sb = new StringBuilder();
         sb.AppendLine($"# {r.Id}: {r.Title}");
         sb.AppendLine();
-        sb.AppendLine($"Estado: {r.Status} · Spec: {r.FilePath}:{r.Line + 1}");
+        sb.AppendLine($"Status: {r.Status} · Spec: {r.FilePath}:{r.Line + 1}");
         sb.AppendLine();
         if (t.HasDrift || (t.DriftInfo.Any && t.Requirement.IsEnforced))
         {
-            sb.AppendLine("## Cambios desde la última revisión");
+            sb.AppendLine("## Changes since the last review");
             sb.AppendLine();
             if (t.DriftInfo.StatementChanged)
             {
                 sb.AppendLine(t.IsImplemented
-                    ? $"- El enunciado cambió: revisa que {string.Join(", ", t.Implementations.Select(Link))} sigue cumpliéndolo."
-                    : "- El enunciado cambió (aún no hay implementación).");
+                    ? $"- The statement changed: check that {string.Join(", ", t.Implementations.Select(Link))} still satisfies it."
+                    : "- The statement changed (there is no implementation yet).");
             }
 
             foreach (var c in t.DriftInfo.ChangedCriteria)
             {
                 var tests = t.Verifications.Where(v => v.Criterion == c.Id).ToList();
                 sb.AppendLine(tests.Count > 0
-                    ? $"- {c.Id} cambió: revisa {string.Join(", ", tests.Select(Link))}."
-                    : $"- {c.Id} cambió (aún no tiene test).");
+                    ? $"- {c.Id} changed: review {string.Join(", ", tests.Select(Link))}."
+                    : $"- {c.Id} changed (it has no test yet).");
             }
 
-            sb.AppendLine("- Cuando una persona haya revisado el código y los tests, se registra con `dotnet spectrace lock --requirement " + r.Id + "`. No lo ejecutes tú sin su visto bueno.");
+            sb.AppendLine("- Once a person has reviewed the code and the tests, it is recorded with `dotnet spectrace lock --requirement " + r.Id + "`. Do not run it yourself without their approval.");
             sb.AppendLine();
         }
 
-        sb.AppendLine("## Enunciado");
+        sb.AppendLine("## Statement");
         sb.AppendLine();
-        sb.AppendLine(r.Statement.Length > 0 ? r.Statement : "(sin enunciado)");
+        sb.AppendLine(r.Statement.Length > 0 ? r.Statement : "(no statement)");
         sb.AppendLine();
-        sb.AppendLine("## Criterios de aceptación");
+        sb.AppendLine("## Acceptance criteria");
         sb.AppendLine();
         foreach (var c in r.Criteria)
         {
             var tests = t.Verifications.Where(v => v.Criterion == c.Id).ToList();
-            var state = tests.Count > 0 ? "con test: " + string.Join(", ", tests.Select(Link)) : "SIN TEST";
+            var state = tests.Count > 0 ? "tested by: " + string.Join(", ", tests.Select(Link)) : "NO TEST";
             sb.AppendLine($"- {c.Id}: {c.Text} — {state}");
         }
 
         sb.AppendLine();
-        sb.AppendLine("## Implementación actual");
+        sb.AppendLine("## Current implementation");
         sb.AppendLine();
         if (t.IsImplemented) foreach (var l in t.Implementations) sb.AppendLine($"- {Link(l)}");
-        else sb.AppendLine("- Ninguna todavía.");
+        else sb.AppendLine("- None yet.");
         sb.AppendLine();
         AppendCodeContext(sb, model, t);
-        sb.AppendLine("## Cómo marcar el trabajo");
+        sb.AppendLine("## How to mark the work");
         sb.AppendLine();
-        sb.AppendLine($"- En el código que lo implementa: `[Implements(Requirements.{r.Identifier})]`");
+        sb.AppendLine($"- On the code that implements it: `[Implements(Requirements.{r.Identifier})]`");
         foreach (var c in r.Criteria)
         {
-            sb.AppendLine($"- En el test de {c.Id}: `[Verifies(Requirements.{r.Identifier}, AcceptanceCriteria.{r.Identifier}.{SpecNaming.ToIdentifier(c.Id)})]`");
+            sb.AppendLine($"- On the test for {c.Id}: `[Verifies(Requirements.{r.Identifier}, AcceptanceCriteria.{r.Identifier}.{SpecNaming.ToIdentifier(c.Id)})]`");
         }
 
-        sb.AppendLine("- Comprueba con `dotnet build`: no deben quedar ST0003/ST0004/ST0005 para este requisito.");
+        sb.AppendLine("- Check with `dotnet build`: no ST0003/ST0004/ST0005 should remain for this requirement.");
         return sb.ToString();
     }
 
-    /// <summary>Ficheros que ya trabajan con requisitos de la misma spec, con los IDs que implementan o verifican.</summary>
+    /// <summary>Files that already work with requirements of the same spec, with the IDs they implement or verify.</summary>
     public static IReadOnlyList<(string File, LinkKind Kind, IReadOnlyList<string> Ids)> RelatedFiles(TraceModel model, RequirementTrace t)
     {
         var sameSpec = model.Requirements.Where(x => x.Requirement.FilePath == t.Requirement.FilePath).ToList();
@@ -317,7 +317,7 @@ public static class Reports
             .SelectMany(x => x.Implementations.Concat(x.Verifications))
             .GroupBy(l => (l.File, l.Kind))
             .Select(g => (g.Key.File, g.Key.Kind, (IReadOnlyList<string>)g.Select(l => l.RequirementId).Distinct().OrderBy(i => i, StringComparer.Ordinal).ToList()))
-            // Primero los ficheros de este requisito; luego implementación antes que tests.
+            // Files of this requirement first; then implementation before tests.
             .OrderByDescending(f => f.Item3.Contains(t.Requirement.Id))
             .ThenBy(f => f.Kind)
             .ThenBy(f => f.File, StringComparer.Ordinal)
@@ -325,13 +325,13 @@ public static class Reports
     }
 
     /// <summary>
-    /// Dónde va el código y qué leer antes de escribirlo: proyectos con su namespace de catálogo y ficheros relacionados.
-    /// Sin esto, un agente que no puede explorar el repositorio inventa tipos y namespaces.
+    /// Where the code goes and what to read before writing it: projects with their catalog namespace, and related files.
+    /// Without this, an agent that cannot explore the repository invents types and namespaces.
     /// </summary>
     private static void AppendCodeContext(StringBuilder sb, TraceModel model, RequirementTrace t)
     {
         var related = RelatedFiles(model, t);
-        sb.AppendLine("## Dónde va el código");
+        sb.AppendLine("## Where the code goes");
         sb.AppendLine();
 
         IEnumerable<ProjectInfo> ProjectsFor(LinkKind kind, bool isTest)
@@ -344,27 +344,27 @@ public static class Reports
         var tests = ProjectsFor(LinkKind.Verifies, isTest: true).ToList();
         if (impl.Count == 0 && tests.Count == 0)
         {
-            sb.AppendLine("- No se ha encontrado ningún .csproj en las carpetas de código.");
+            sb.AppendLine("- No .csproj was found in the code folders.");
         }
 
-        foreach (var p in impl) sb.AppendLine($"- Implementación en `{p.Name}` ({p.Directory}): `using SpecTrace;` y `using {p.CatalogNamespace};`");
-        foreach (var p in tests) sb.AppendLine($"- Tests en `{p.Name}` ({p.Directory}): `using SpecTrace;` y `using {p.CatalogNamespace};`");
-        sb.AppendLine("- `Requirements` y `AcceptanceCriteria` son clases generadas por proyecto (internal): usa el namespace de cada proyecto.");
+        foreach (var p in impl) sb.AppendLine($"- Implementation in `{p.Name}` ({p.Directory}): `using SpecTrace;` and `using {p.CatalogNamespace};`");
+        foreach (var p in tests) sb.AppendLine($"- Tests in `{p.Name}` ({p.Directory}): `using SpecTrace;` and `using {p.CatalogNamespace};`");
+        sb.AppendLine("- `Requirements` and `AcceptanceCriteria` are generated per project (internal): use each project's namespace.");
         sb.AppendLine();
 
-        sb.AppendLine("## Código relacionado");
+        sb.AppendLine("## Related code");
         sb.AppendLine();
         if (related.Count == 0)
         {
-            sb.AppendLine("- Ningún fichero trabaja aún con requisitos de esta spec. Busca los tipos del dominio con get_code (type).");
+            sb.AppendLine("- No file works with requirements of this spec yet. Look up the domain types with get_code (type).");
         }
         else
         {
-            sb.AppendLine("Ficheros que ya trabajan con requisitos de esta spec. Léelos (get_code) antes de proponer cambios y reutiliza sus tipos:");
+            sb.AppendLine("Files that already work with requirements of this spec. Read them (get_code) before proposing changes and reuse their types:");
             sb.AppendLine();
             foreach (var (file, kind, ids) in related)
             {
-                sb.AppendLine($"- {file} — {(kind == LinkKind.Implements ? "implementa" : "verifica")} {string.Join(", ", ids)}");
+                sb.AppendLine($"- {file} — {(kind == LinkKind.Implements ? "implements" : "verifies")} {string.Join(", ", ids)}");
             }
         }
 

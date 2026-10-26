@@ -4,7 +4,7 @@ using System.Linq;
 
 namespace SpecTrace.Specs
 {
-    /// <summary>Criterio de aceptación de un requisito (<c>- AC-1: ...</c>).</summary>
+    /// <summary>Acceptance criterion of a requirement (<c>- AC-1: ...</c>).</summary>
     public sealed class SpecCriterion
     {
         public SpecCriterion(string id, string text, int line)
@@ -17,11 +17,11 @@ namespace SpecTrace.Specs
         public string Id { get; }
         public string Text { get; }
 
-        /// <summary>Línea en el fichero, empezando en 0.</summary>
+        /// <summary>Zero-based line in the file.</summary>
         public int Line { get; }
     }
 
-    /// <summary>Un requisito con ID, enunciado (idealmente EARS), estado y criterios.</summary>
+    /// <summary>A requirement with an ID, a statement (ideally EARS), a status and criteria.</summary>
     public sealed class SpecRequirement
     {
         public SpecRequirement(string id, string title, string statement, string status,
@@ -43,18 +43,18 @@ namespace SpecTrace.Specs
         public IReadOnlyList<SpecCriterion> Criteria { get; }
         public string FilePath { get; }
 
-        /// <summary>Línea del encabezado, empezando en 0.</summary>
+        /// <summary>Zero-based line of the heading.</summary>
         public int Line { get; }
 
         public bool IsDeprecated => Status == SpecStatus.Deprecated;
 
-        /// <summary>Approved o implemented: se exige implementación y test.</summary>
+        /// <summary>Approved or implemented: implementation and tests are required.</summary>
         public bool IsEnforced => Status == SpecStatus.Approved || Status == SpecStatus.Implemented;
 
         public SpecCriterion? FindCriterion(string id) =>
             Criteria.FirstOrDefault(c => string.Equals(c.Id, id, StringComparison.OrdinalIgnoreCase));
 
-        /// <summary>Nombre de identificador C# para el ID: <c>ORD-001</c> → <c>ORD_001</c>.</summary>
+        /// <summary>C# identifier for the ID: <c>ORD-001</c> → <c>ORD_001</c>.</summary>
         public string Identifier => SpecNaming.ToIdentifier(Id);
     }
 
@@ -78,7 +78,7 @@ namespace SpecTrace.Specs
         UnknownStatus,
     }
 
-    /// <summary>Problema de formato detectado al leer una spec.</summary>
+    /// <summary>Format issue found while reading a spec.</summary>
     public sealed class SpecIssue
     {
         public SpecIssue(SpecIssueKind kind, string message, string filePath, int line)
@@ -114,7 +114,7 @@ namespace SpecTrace.Specs
         public IReadOnlyList<SpecIssue> Issues { get; }
     }
 
-    /// <summary>Todas las specs de un proyecto, indexadas por ID de requisito.</summary>
+    /// <summary>All the specs of a project, indexed by requirement ID.</summary>
     public sealed class SpecCatalog
     {
         private readonly Dictionary<string, SpecRequirement> _byId;
@@ -129,7 +129,7 @@ namespace SpecTrace.Specs
 
         public IReadOnlyList<SpecDocument> Documents { get; }
 
-        /// <summary>Problemas de formato de todos los ficheros, incluidos IDs duplicados entre ficheros.</summary>
+        /// <summary>Format issues of all files, including IDs duplicated across files.</summary>
         public IReadOnlyList<SpecIssue> Issues { get; }
 
         public IEnumerable<SpecRequirement> Requirements => _byId.Values.OrderBy(r => r.Id, StringComparer.Ordinal);
@@ -155,7 +155,7 @@ namespace SpecTrace.Specs
                         if (first.FilePath != req.FilePath)
                         {
                             issues.Add(new SpecIssue(SpecIssueKind.DuplicateRequirement,
-                                $"El requisito '{req.Id}' ya está definido en {first.FilePath} (línea {first.Line + 1})",
+                                $"Requirement '{req.Id}' is already defined in {first.FilePath} (line {first.Line + 1})",
                                 req.FilePath, req.Line));
                         }
 
@@ -179,7 +179,7 @@ namespace SpecTrace.Specs
             return name.Length > 0 && char.IsDigit(name[0]) ? "_" + name : name;
         }
 
-        /// <summary>Convierte un título libre en un fragmento de identificador PascalCase sin acentos.</summary>
+        /// <summary>Turns a free-text title into a PascalCase identifier fragment without diacritics.</summary>
         public static string ToPascalSlug(string text, int maxWords = 6)
         {
             var normalized = RemoveDiacritics(text);
@@ -193,8 +193,8 @@ namespace SpecTrace.Specs
         }
 
         /// <summary>
-        /// Los IDs más parecidos a <paramref name="target"/> (distancia de edición, sin distinguir mayúsculas),
-        /// para sugerir correcciones de erratas como ORD-01 → ORD-001.
+        /// The IDs closest to <paramref name="target"/> (edit distance, case-insensitive), used to suggest
+        /// fixes for typos such as ORD-01 → ORD-001.
         /// </summary>
         public static IReadOnlyList<string> Closest(IEnumerable<string> candidates, string target, int max = 3)
         {

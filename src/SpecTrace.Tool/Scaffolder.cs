@@ -6,13 +6,13 @@ using SpecTrace.Specs;
 
 namespace SpecTrace.Tool;
 
-/// <summary>Genera esqueletos de tests xUnit para los criterios de aceptación que no tienen test.</summary>
+/// <summary>Generates xUnit test skeletons for acceptance criteria that have no test.</summary>
 public static class Scaffolder
 {
     public static IReadOnlyList<string> ScaffoldTests(TraceModel model, string testProjectDir, string? requirementId, string? ns)
     {
         var project = Directory.EnumerateFiles(testProjectDir, "*.csproj").FirstOrDefault()
-            ?? throw new ArgumentException($"No hay ningún .csproj en {testProjectDir}");
+            ?? throw new ArgumentException($"There is no .csproj in {testProjectDir}");
         var rootNs = ns ?? Path.GetFileNameWithoutExtension(project);
         var outDir = Path.Combine(testProjectDir, "Specs");
         var written = new List<string>();

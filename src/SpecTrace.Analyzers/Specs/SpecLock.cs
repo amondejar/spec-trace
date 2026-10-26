@@ -8,8 +8,8 @@ using System.Text.RegularExpressions;
 namespace SpecTrace.Specs
 {
     /// <summary>
-    /// Huella del texto de un requisito. Solo cuenta lo que cambia el comportamiento exigido: el enunciado y cada
-    /// criterio de aceptación. El título y el estado no forman parte de la huella; los espacios y saltos de línea se normalizan.
+    /// Fingerprint of a requirement's text. Only what changes the required behavior counts: the statement and each
+    /// acceptance criterion. Title and status are not part of the fingerprint; whitespace and line breaks are normalized.
     /// </summary>
     public static class SpecFingerprint
     {
@@ -30,7 +30,7 @@ namespace SpecTrace.Specs
                 requirement.Criteria.ToDictionary(c => c.Id, c => Of(c.Text), StringComparer.OrdinalIgnoreCase));
     }
 
-    /// <summary>Versión revisada de un requisito: huella del enunciado y de cada criterio.</summary>
+    /// <summary>Reviewed version of a requirement: fingerprint of the statement and of each criterion.</summary>
     public sealed class SpecLockEntry
     {
         public SpecLockEntry(string id, string statement, IReadOnlyDictionary<string, string> criteria)
@@ -46,10 +46,9 @@ namespace SpecTrace.Specs
     }
 
     /// <summary>
-    /// Fichero <c>spectrace.lock</c>: la versión de cada requisito contra la que se revisaron su código y sus tests.
-    /// Formato de texto, una línea por requisito, ordenado por ID para que los diffs en git sean legibles y no haya
-    /// conflictos más allá de la línea del requisito tocado. Sin JSON a propósito: el analizador corre en netstandard2.0
-    /// sin dependencias.
+    /// The <c>spectrace.lock</c> file: the version of each requirement its code and tests were reviewed against.
+    /// Plain text, one line per requirement, sorted by ID so git diffs stay readable and conflicts never go beyond the
+    /// line of the requirement that changed. No JSON on purpose: the analyzer runs on netstandard2.0 without dependencies.
     /// <code>ORD-001 statement:3f2a9c1e5b7d AC-1:9b1c0d2e3f4a AC-2:77aa01bc23de</code>
     /// </summary>
     public sealed class SpecLock
@@ -57,9 +56,9 @@ namespace SpecTrace.Specs
         public const string FileName = "spectrace.lock";
 
         private const string Header =
-            "# spectrace.lock: versión de cada requisito revisada contra su código y sus tests.\n" +
-            "# La genera `dotnet spectrace lock`. Si el texto de un requisito cambia, el build avisa con ST0010/ST0011\n" +
-            "# hasta que alguien revise el código y los tests y vuelva a ejecutar `dotnet spectrace lock --requirement <ID>`.\n";
+            "# spectrace.lock: the version of each requirement that its code and tests were reviewed against.\n" +
+            "# Written by `dotnet spectrace lock`. If a requirement's text changes, the build reports ST0010/ST0011\n" +
+            "# until someone reviews the code and tests and runs `dotnet spectrace lock --requirement <ID>` again.\n";
 
         private readonly Dictionary<string, SpecLockEntry> _entries;
 
@@ -82,7 +81,7 @@ namespace SpecTrace.Specs
             return new SpecLock(copy);
         }
 
-        /// <summary>Lee el fichero; ignora comentarios y líneas que no entiende.</summary>
+        /// <summary>Reads the file; ignores comments and lines it does not understand.</summary>
         public static SpecLock Parse(string text)
         {
             var entries = new List<SpecLockEntry>();
@@ -128,7 +127,7 @@ namespace SpecTrace.Specs
         }
     }
 
-    /// <summary>Qué ha cambiado en un requisito desde su última revisión.</summary>
+    /// <summary>What changed in a requirement since its last review.</summary>
     public sealed class SpecDrift
     {
         public static readonly SpecDrift NotLocked = new SpecDrift(false, false, Array.Empty<SpecCriterion>());
@@ -140,13 +139,13 @@ namespace SpecTrace.Specs
             ChangedCriteria = changedCriteria;
         }
 
-        /// <summary>El requisito tiene una entrada en spectrace.lock.</summary>
+        /// <summary>The requirement has an entry in spectrace.lock.</summary>
         public bool IsLocked { get; }
 
         public bool StatementChanged { get; }
 
         /// <summary>
-        /// Criterios cuyo texto cambió. Un criterio nuevo (sin huella) no cuenta: si no tiene test ya lo avisa ST0005.
+        /// Criteria whose text changed. A new criterion (without a fingerprint) does not count: if it has no test, ST0005 reports it.
         /// </summary>
         public IReadOnlyList<SpecCriterion> ChangedCriteria { get; }
 

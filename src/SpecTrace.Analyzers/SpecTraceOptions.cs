@@ -9,7 +9,7 @@ using SpecTrace.Specs;
 
 namespace SpecTrace.Analyzers
 {
-    /// <summary>Opciones leídas de las propiedades MSBuild visibles al compilador (ver build/SpecTrace.props).</summary>
+    /// <summary>Options read from the MSBuild properties visible to the compiler (see build/SpecTrace.props).</summary>
     internal readonly struct SpecTraceOptions : IEquatable<SpecTraceOptions>
     {
         public SpecTraceOptions(string catalogNamespace, bool isTestProject)

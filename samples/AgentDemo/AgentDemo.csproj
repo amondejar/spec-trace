@@ -1,9 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <!--
-    Demo: un agente de Microsoft Agent Framework que usa las herramientas MCP de SpecTrace.
-    No forma parte de SpecTrace.sln para que el CI no dependa de un proveedor de modelos.
-    Versiones flotantes a propósito: el ecosistema cambia rápido; fíjalas cuando lo adoptes.
+    Demo: a Microsoft Agent Framework agent that uses the SpecTrace MCP tools.
+    Not part of SpecTrace.sln so CI does not depend on a model provider.
+    Floating versions on purpose: the ecosystem moves fast; pin them when you adopt it.
   -->
   <PropertyGroup>
     <OutputType>Exe</OutputType>

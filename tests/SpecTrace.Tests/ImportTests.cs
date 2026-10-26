@@ -86,7 +86,7 @@ The system MUST expire idle sessions after 30 minutes.
             var us1 = spec.Requirements.Single(r => r.Id == "PA1-US-1");
             Assert.Equal("Create an album", us1.Title);
             Assert.Equal(SpecStatus.Approved, us1.Status);
-            Assert.Equal("A user groups photos into an album. (Prioridad P1)", us1.Statement);
+            Assert.Equal("A user groups photos into an album. (Priority P1)", us1.Statement);
             Assert.Equal(2, us1.Criteria.Count);
             Assert.StartsWith("Given 3 selected photos, When they create an album", us1.Criteria[0]);
 
@@ -105,8 +105,8 @@ The system MUST expire idle sessions after 30 minutes.
 
             var doc = SpecParser.Parse(output, File.ReadAllText(output));
             Assert.Equal(new[] { "PA1-US-1", "PA1-US-2", "PA1-FR-001", "PA1-FR-002" }, doc.Requirements.Select(r => r.Id).ToArray());
-            Assert.Equal("A user groups photos into an album. (Prioridad P1)", doc.Requirements[0].Statement);
-            // FR sin criterios están en proposed: no generan avisos de formato.
+            Assert.Equal("A user groups photos into an album. (Priority P1)", doc.Requirements[0].Statement);
+            // FRs without criteria are proposed: they produce no format warnings.
             Assert.Empty(doc.Issues);
         }
 
@@ -117,8 +117,8 @@ The system MUST expire idle sessions after 30 minutes.
             var output = Path.Combine(_dir, "albums.spec.md");
             ImportWriter.Write(SpecKitImporter.Parse(source, SpecKit, output));
 
-            // Alguien aprueba FR-001 y le añade un criterio a mano.
-            // La spec se escribe con el salto de línea del sistema (\r\n en Windows): se normaliza antes de editar.
+            // Someone approves FR-001 and adds a criterion by hand.
+            // The spec is written with the system line ending (\r\n on Windows): normalize it before editing.
             var edited = File.ReadAllText(output).Replace("\r\n", "\n").Replace(
                 "## PA1-FR-001: Let users create albums with a name of…\nStatus: proposed",
                 "## PA1-FR-001: Let users create albums with a name of…\nStatus: approved");

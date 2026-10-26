@@ -11,20 +11,20 @@ namespace SpecTrace.Tool;
 
 public enum LinkKind { Implements, Verifies }
 
-/// <summary>Una marca [Implements] o [Verifies] encontrada en el código.</summary>
+/// <summary>An [Implements] or [Verifies] mark found in the code.</summary>
 public sealed record TraceLink(LinkKind Kind, string RequirementId, string? Criterion, string Symbol, string File, int Line);
 
-/// <summary>Estado de trazabilidad de un requisito.</summary>
+/// <summary>Traceability status of a requirement.</summary>
 public sealed record RequirementTrace(SpecRequirement Requirement, IReadOnlyList<TraceLink> Implementations, IReadOnlyList<TraceLink> Verifications,
     SpecDrift? Drift = null)
 {
-    /// <summary>Cambios en el texto desde la última revisión (spectrace.lock).</summary>
+    /// <summary>Text changes since the last review (spectrace.lock).</summary>
     public SpecDrift DriftInfo => Drift ?? SpecDrift.NotLocked;
 
-    /// <summary>El enunciado cambió y hay código que lo implementa: hay que revisarlo (ST0010).</summary>
+    /// <summary>The statement changed and there is code implementing it: it must be reviewed (ST0010).</summary>
     public bool CodeNeedsReview => Requirement.IsEnforced && DriftInfo.StatementChanged && IsImplemented;
 
-    /// <summary>Criterios cambiados que tienen tests: hay que revisar esos tests (ST0011).</summary>
+    /// <summary>Changed criteria that have tests: those tests must be reviewed (ST0011).</summary>
     public IEnumerable<SpecCriterion> CriteriaNeedingReview =>
         Requirement.IsEnforced
             ? DriftInfo.ChangedCriteria.Where(c => Verifications.Any(v => v.Criterion == c.Id))
@@ -43,8 +43,8 @@ public sealed record RequirementTrace(SpecRequirement Requirement, IReadOnlyList
     public bool HasGap => Requirement.IsEnforced && (!IsImplemented || !IsVerified || UncoveredCriteria.Any());
 }
 
-/// <summary>Un proyecto .csproj de las carpetas de código, con el namespace de su catálogo generado.</summary>
-/// <param name="Directory">Carpeta del proyecto, relativa a la raíz y con '/' ("." si es la raíz).</param>
+/// <summary>A .csproj project in the code folders, with the namespace of its generated catalog.</summary>
+/// <param name="Directory">Project folder, relative to the root and with '/' ("." for the root itself).</param>
 public sealed record ProjectInfo(string Name, string Directory, string CatalogNamespace, bool IsTest)
 {
     public bool Contains(string relativeFile) =>
@@ -56,14 +56,14 @@ public sealed record TraceModel(string Root, SpecCatalog Catalog, IReadOnlyList<
 {
     public bool HasLock => Lock != null;
 
-    /// <summary>El proyecto más interior que contiene el fichero (o null).</summary>
+    /// <summary>The innermost project containing the file (or null).</summary>
     public ProjectInfo? ProjectOf(string relativeFile) =>
         Projects.Where(p => p.Contains(relativeFile)).OrderByDescending(p => p.Directory.Length).FirstOrDefault();
 }
 
 /// <summary>
-/// Construye el modelo de trazabilidad leyendo las specs y analizando el código C# solo a nivel de sintaxis,
-/// sin compilar ni restaurar paquetes: es rápido y funciona en cualquier rama o en CI.
+/// Builds the traceability model by reading the specs and parsing the C# code at the syntax level only,
+/// without compiling or restoring packages: it is fast and works on any branch or in CI.
 /// </summary>
 public static class TraceScanner
 {
@@ -107,14 +107,14 @@ public static class TraceScanner
         return File.Exists(path) ? SpecLock.Parse(File.ReadAllText(path)) : null;
     }
 
-    /// <summary>Ficheros .cs de las carpetas de código (sin bin/obj), con ruta absoluta.</summary>
+    /// <summary>.cs files of the code folders (without bin/obj), as absolute paths.</summary>
     public static IEnumerable<string> SourceFiles(SpecTraceConfig config, string pattern = "*.cs") =>
         config.Sources.Select(s => Path.Combine(config.Root, s)).Where(Directory.Exists).SelectMany(d => Enumerate(d, pattern));
 
     /// <summary>
-    /// Proyectos .csproj de las carpetas de código. El namespace del catálogo sigue la misma regla que el generador:
-    /// SpecTraceNamespace, si no RootNamespace + ".Specs", y RootNamespace por defecto es el nombre del proyecto.
-    /// Solo se lee el propio .csproj (no Directory.Build.props).
+    /// .csproj projects of the code folders. The catalog namespace follows the same rule as the generator:
+    /// SpecTraceNamespace, otherwise RootNamespace + ".Specs", and RootNamespace defaults to the project name.
+    /// Only the .csproj itself is read (not Directory.Build.props).
     /// </summary>
     public static IReadOnlyList<ProjectInfo> FindProjects(SpecTraceConfig config)
     {
@@ -152,7 +152,7 @@ public static class TraceScanner
         return projects.OrderBy(p => p.Directory, StringComparer.Ordinal).ToList();
     }
 
-    /// <summary>Ficheros (relativos a la raíz) donde se declara un tipo con ese nombre: clase, record, struct, interfaz o enum.</summary>
+    /// <summary>Files (relative to the root) that declare a type with that name: class, record, struct, interface or enum.</summary>
     public static IReadOnlyList<string> FindTypeFiles(SpecTraceConfig config, string typeName)
     {
         var name = typeName.Split('<')[0].Split('.').Last().Trim();
@@ -222,7 +222,7 @@ public static class TraceScanner
         _ => null,
     };
 
-    /// <summary>Un test con Skip o [Ignore] no cuenta como verificación (mismo criterio que el analizador).</summary>
+    /// <summary>A test with Skip or [Ignore] does not count as verification (same rule as the analyzer).</summary>
     private static bool IsSkipped(AttributeSyntax attr)
     {
         var owner = attr.Ancestors().OfType<MemberDeclarationSyntax>().FirstOrDefault();

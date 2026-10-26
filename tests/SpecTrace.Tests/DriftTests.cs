@@ -4,18 +4,18 @@ using Xunit;
 
 namespace SpecTrace.Tests
 {
-    /// <summary>v0.4: cambios en la spec después de revisar el código y los tests (spectrace.lock, ST0010/ST0011).</summary>
+    /// <summary>v0.4: spec changes after the code and tests were reviewed (spectrace.lock, ST0010/ST0011).</summary>
     public class DriftTests
     {
-        private const string Spec = @"# Pedidos
+        private const string Spec = @"# Orders
 
-## ORD-001: Crear pedido
+## ORD-001: Create order
 When the customer submits a cart, the system shall create an order.
 
 - AC-1: Given 2 lines, then the order has 2 lines.
 - AC-2: Given an empty cart, then it is rejected.
 
-## ORD-002: Cancelar pedido
+## ORD-002: Cancel order
 While an order is Pending, when it is cancelled, the system shall mark it Cancelled.
 
 - AC-1: Given a Pending order, then it is Cancelled.
@@ -53,7 +53,7 @@ public class OrderTests
         public void Lock_round_trips_and_ignores_comments_and_garbage()
         {
             var original = LockOf(Spec);
-            var parsed = SpecLock.Parse("# comentario\r\n\r\nbasura sin dos puntos\r\n" + original.Replace("\n", "\r\n"));
+            var parsed = SpecLock.Parse("# comment\r\n\r\ngarbage without a colon\r\n" + original.Replace("\n", "\r\n"));
 
             Assert.Equal(2, parsed.Count);
             Assert.Equal(original, parsed.Render());
@@ -96,7 +96,7 @@ public class OrderTests
 
             Assert.Empty(impl.SpecTrace("ST0010"));
             var d = Assert.Single(tests.SpecTrace("ST0011"));
-            Assert.Contains("El criterio AC-2 de 'ORD-001'", d.GetMessage());
+            Assert.Contains("Criterion AC-2 of 'ORD-001'", d.GetMessage());
             Assert.Contains("OrderTests.Empty_cart_rejected", d.GetMessage());
             Assert.Equal(6, d.Location.GetLineSpan().StartLinePosition.Line);
         }
@@ -104,7 +104,7 @@ public class OrderTests
         [Fact]
         public void Changes_to_title_or_status_are_not_drift()
         {
-            var changed = Spec.Replace("## ORD-001: Crear pedido", "## ORD-001: Crear un pedido nuevo\nStatus: implemented");
+            var changed = Spec.Replace("## ORD-001: Create order", "## ORD-001: Create a new order\nStatus: implemented");
 
             var impl = TestHarness.RunWithLock(Implementation, changed, LockOf(Spec));
 

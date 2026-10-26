@@ -1,9 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <!--
-    Code fixes y refactorizaciones para el IDE. Va en un ensamblado aparte porque depende de
-    Microsoft.CodeAnalysis.Workspaces, que el compilador de línea de comandos no carga (RS1038).
-    Se empaqueta junto al analizador desde SpecTrace.Package.
+    IDE code fixes and refactorings. A separate assembly because it depends on
+    Microsoft.CodeAnalysis.Workspaces, which the command-line compiler does not load (RS1038).
+    Packed together with the analyzer by SpecTrace.Package.
   -->
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>

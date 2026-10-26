@@ -1,13 +1,13 @@
-// Demo de SpecTrace + Microsoft Agent Framework + MCP.
+// SpecTrace + Microsoft Agent Framework + MCP demo.
 //
-// El agente recibe un ID de requisito, consulta la spec y el estado de trazabilidad a través del servidor
-// MCP de SpecTrace (`spectrace mcp`) y propone el código y los tests que faltan, con las marcas
-// [Implements]/[Verifies] correctas. Por defecto solo usa herramientas de lectura.
+// The agent receives a requirement ID, looks up the spec and the traceability status through the SpecTrace
+// MCP server (`spectrace mcp`) and proposes the missing code and tests, with the correct
+// [Implements]/[Verifies] markers. By default it only uses read-only tools.
 //
 //   dotnet build src/SpecTrace.Tool
-//   export OPENAI_API_KEY=...              (o OPENAI_BASE_URL para Ollama, LM Studio, Azure OpenAI v1...)
+//   export OPENAI_API_KEY=...              (or OPENAI_BASE_URL for Ollama, LM Studio, Azure OpenAI v1...)
 //   dotnet run --project samples/AgentDemo -- ORD-002
-//   dotnet run --project samples/AgentDemo -- ORD-003 --allow-writes   (permite scaffold_tests y propose_requirement)
+//   dotnet run --project samples/AgentDemo -- ORD-003 --allow-writes   (allows scaffold_tests and propose_requirement)
 
 using System.ClientModel;
 using Microsoft.Agents.AI;
@@ -19,17 +19,17 @@ var requirementId = args.FirstOrDefault(a => !a.StartsWith("--", StringCompariso
 var allowWrites = args.Contains("--allow-writes");
 var root = Path.GetFullPath(Option("--root") ?? DefaultRoot());
 
-// ---------- Modelo: cualquier endpoint compatible con la API de OpenAI ----------
+// ---------- Model: any OpenAI-compatible endpoint ----------
 var apiKey = Environment.GetEnvironmentVariable("OPENAI_API_KEY");
 var baseUrl = Environment.GetEnvironmentVariable("OPENAI_BASE_URL");
 var model = Environment.GetEnvironmentVariable("OPENAI_MODEL") ?? "gpt-4.1-mini";
 if (apiKey is null && baseUrl is null)
 {
     Console.Error.WriteLine("""
-        Configura un modelo antes de ejecutar la demo:
-          OPENAI_API_KEY   clave de OpenAI (o de tu proveedor)
-          OPENAI_BASE_URL  opcional: endpoint compatible con OpenAI, p. ej. http://localhost:11434/v1 (Ollama)
-          OPENAI_MODEL     opcional: nombre del modelo (por defecto gpt-4.1-mini)
+        Configure a model before running the demo:
+          OPENAI_API_KEY   OpenAI key (or your provider's)
+          OPENAI_BASE_URL  optional: OpenAI-compatible endpoint, e.g. http://localhost:11434/v1 (Ollama)
+          OPENAI_MODEL     optional: model name (default gpt-4.1-mini)
         """);
     return 1;
 }
@@ -40,9 +40,9 @@ IChatClient chatClient = new OpenAIClient(new ApiKeyCredential(apiKey ?? "no-key
     .GetChatClient(model)
     .AsIChatClient();
 
-// ---------- Servidor MCP de SpecTrace por stdio ----------
+// ---------- SpecTrace MCP server over stdio ----------
 var (command, arguments) = SpecTraceServerCommand(root);
-Console.WriteLine($"Servidor MCP: {command} {string.Join(' ', arguments)}");
+Console.WriteLine($"MCP server: {command} {string.Join(' ', arguments)}");
 
 await using var mcp = await McpClient.CreateAsync(new StdioClientTransport(new StdioClientTransportOptions
 {
@@ -55,32 +55,32 @@ var readOnlyTools = new[] { "list_requirements", "get_requirement", "get_code", 
 var tools = (await mcp.ListToolsAsync())
     .Where(t => allowWrites || readOnlyTools.Contains(t.Name))
     .ToList();
-Console.WriteLine($"Herramientas: {string.Join(", ", tools.Select(t => t.Name))}\n");
+Console.WriteLine($"Tools: {string.Join(", ", tools.Select(t => t.Name))}\n");
 
-// ---------- Agente ----------
+// ---------- Agent ----------
 AIAgent agent = chatClient.AsAIAgent(
     instructions: $"""
-        Eres un ingeniero .NET que trabaja con Spec-Driven Development en un repositorio que usa SpecTrace.
-        Reglas:
-        - Las specs son la fuente de verdad. Consulta siempre el requisito con get_requirement antes de proponer nada.
-        - Antes de escribir código, lee con get_code los ficheros relacionados (requirement_id) y los tipos que vayas a usar (type).
-          Reutiliza los tipos, constructores y miembros que existen; no supongas propiedades ni setters. Si el diseño actual
-          impide implementar algo, dilo y propón el cambio mínimo.
-        - Usa exactamente los using que indica get_requirement en "Dónde va el código".
-        - No inventes comportamiento. Si hace falta un requisito nuevo, {(allowWrites ? "propónlo con propose_requirement (queda en estado proposed)" : "descríbelo como propuesta para que una persona lo añada a la spec")}.
-        - El código que implementa un requisito lleva [Implements(Requirements.<ID con guiones bajos>)].
-        - Cada test xUnit verifica un criterio: [Verifies(Requirements.<ID>, AcceptanceCriteria.<ID>.AC_n)].
-        - Un test con Skip no cuenta como cobertura.
-        - Responde en español, con el código en bloques ```csharp y el fichero de destino encima de cada bloque.
+        You are a .NET engineer doing Spec-Driven Development in a repository that uses SpecTrace.
+        Rules:
+        - The specs are the source of truth. Always look up the requirement with get_requirement before proposing anything.
+        - Before writing code, read the related files with get_code (requirement_id) and the types you will use (type).
+          Reuse the existing types, constructors and members; do not assume properties or setters. If the current design
+          prevents implementing something, say so and propose the smallest change.
+        - Use exactly the usings that get_requirement lists under "Where the code goes".
+        - Do not invent behavior. If a new requirement is needed, {(allowWrites ? "propose it with propose_requirement (it stays in status proposed)" : "describe it as a proposal for a person to add to the spec")}.
+        - Code that implements a requirement carries [Implements(Requirements.<ID with underscores>)].
+        - Each xUnit test verifies one criterion: [Verifies(Requirements.<ID>, AcceptanceCriteria.<ID>.AC_n)].
+        - A skipped test does not count as coverage.
+        - Answer with the code in ```csharp blocks and the target file above each block.
         """,
     tools: [.. tools.Cast<AITool>()]);
 
 var task = $"""
-    Trabaja en el requisito {requirementId}.
-    1. Consulta su contexto, el estado de trazabilidad y el código relacionado.
-    2. Explica en dos o tres frases qué falta (implementación, tests o criterios sin test).
-    3. Propón el código que falta, coherente con los tipos existentes: la implementación si no existe y un test xUnit por cada criterio sin test.
-    {(allowWrites ? "4. Si faltan tests, genera los esqueletos con scaffold_tests en tests/Orders.Tests y dime qué rellenar." : "")}
+    Work on requirement {requirementId}.
+    1. Look up its context, its traceability status and the related code.
+    2. Explain in two or three sentences what is missing (implementation, tests or criteria without tests).
+    3. Propose the missing code, consistent with the existing types: the implementation if it does not exist and one xUnit test per criterion without a test.
+    {(allowWrites ? "4. If tests are missing, generate the skeletons with scaffold_tests in tests/Orders.Tests and tell me what to fill in." : "")}
     """;
 
 await foreach (var update in agent.RunStreamingAsync(task))
@@ -91,7 +91,7 @@ await foreach (var update in agent.RunStreamingAsync(task))
 Console.WriteLine();
 return 0;
 
-// ---------- Utilidades ----------
+// ---------- Helpers ----------
 
 string? Option(string name)
 {
@@ -106,9 +106,9 @@ static string DefaultRoot()
     return Directory.Exists(sample) ? sample : cwd;
 }
 
-// Usa la CLI compilada del repositorio si existe (dotnet build src/SpecTrace.Tool);
-// si no, la herramienta local del repositorio (dotnet tool install SpecTrace.Tool, que se invoca como `dotnet spectrace`).
-// No se usa `dotnet run` porque escribe la salida del build en stdout, que es el canal del protocolo.
+// Uses the repository's built CLI if it exists (dotnet build src/SpecTrace.Tool);
+// otherwise the repository's local tool (dotnet tool install SpecTrace.Tool, invoked as `dotnet spectrace`).
+// `dotnet run` is not used because it writes build output to stdout, which is the protocol channel.
 static (string Command, List<string> Arguments) SpecTraceServerCommand(string root)
 {
     var dir = new DirectoryInfo(Directory.GetCurrentDirectory());

@@ -37,6 +37,6 @@ namespace Orders.Tests
             Assert.Equal(OrderState.Cancelled, order.State);
         }
 
-        // ORD-002 AC-2 (cancelar un pedido enviado) no tiene test: SpecTrace lo marca con ST0005.
+        // ORD-002 AC-2 (cancelling a shipped order) has no test: SpecTrace reports it as ST0005.
     }
 }

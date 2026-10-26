@@ -1,19 +1,30 @@
+<p align="center">
+  <img src="https://raw.githubusercontent.com/amondejar/spec-trace/main/assets/icon.png" width="96" alt="SpecTrace">
+</p>
+
 # SpecTrace
 
-Trazabilidad Spec-Driven Development para .NET. Tus specs en Markdown se convierten en un catálogo
-tipado de requisitos, y el compilador de C# avisa de lo que está sin implementar o sin test.
+Spec-Driven Development traceability for .NET. Your Markdown specs become a typed catalog of requirements, and the
+C# compiler tells you what is not implemented, not tested, or out of date with the spec.
 
 ```text
-specs/orders.spec.md(28,1): warning ST0003: El requisito 'ORD-003' (Aplicar cupón de descuento)
-  está approved pero ningún tipo o miembro tiene [Implements("ORD-003")]
+specs/orders.spec.md(28,1): warning ST0003: Requirement 'ORD-003' (Apply discount coupon) is approved
+  but no type or member has [Implements("ORD-003")]
 ```
 
-## Cómo funciona
+SpecTrace links **spec → code → test** at build time, in the IDE, in pull requests and for AI coding agents:
 
-1. Escribes (o generas con Spec Kit / OpenSpec) specs `*.spec.md` con requisitos identificados:
+- Roslyn analyzer and source generator: no extra build step, warnings show up next to the others.
+- Detects spec changes after review (`spectrace.lock`): when a requirement's text changes, the build names the code and tests to review.
+- `dotnet spectrace` CLI: traceability report, test scaffolding, import from Spec Kit and OpenSpec.
+- MCP server and Agent Skill so coding agents start from the spec and stop only when the build is clean.
+
+## How it works
+
+1. Write specs as `*.spec.md` files with identified requirements (or import them from Spec Kit / OpenSpec):
 
    ```markdown
-   ## ORD-001: Crear pedido
+   ## ORD-001: Create order
    Status: approved
 
    When the customer submits a cart with at least one line,
@@ -23,8 +34,8 @@ specs/orders.spec.md(28,1): warning ST0003: El requisito 'ORD-003' (Aplicar cup�
    - AC-2: Given an empty cart, when it is submitted, then the request is rejected.
    ```
 
-2. El generador crea `Requirements.ORD_001` y `AcceptanceCriteria.ORD_001.AC_1`.
-3. Marcas código y tests:
+2. The generator creates `Requirements.ORD_001` and `AcceptanceCriteria.ORD_001.AC_1`.
+3. Mark code and tests:
 
    ```csharp
    [Implements(Requirements.ORD_001)]
@@ -35,82 +46,97 @@ specs/orders.spec.md(28,1): warning ST0003: El requisito 'ORD-003' (Aplicar cup�
    public void Create_with_empty_cart_is_rejected() { ... }
    ```
 
-4. `dotnet build` comprueba la trazabilidad; `dotnet spectrace report` genera la matriz completa.
+4. `dotnet build` checks traceability; `dotnet spectrace report` prints the full matrix.
 
-## Paquetes
+## Packages
 
-| Paquete | Qué contiene |
+| Package | Contents |
 | --- | --- |
-| `SpecTrace` | Analizador + generador Roslyn, code fixes para el IDE y props/targets de MSBuild. Instala `SpecTrace.Abstractions`. |
-| `SpecTrace.Abstractions` | Atributos `[Implements]`, `[Verifies]`. |
-| `SpecTrace.Tool` | CLI `dotnet spectrace`: `report`, `context`, `scaffold-tests`, `import`, `mcp`, `init`. |
+| `SpecTrace` | Roslyn analyzer + source generator, IDE code fixes and MSBuild props/targets. Brings in `SpecTrace.Abstractions`. |
+| `SpecTrace.Abstractions` | The `[Implements]` and `[Verifies]` attributes. |
+| `SpecTrace.Tool` | The `dotnet spectrace` CLI: `report`, `context`, `lock`, `scaffold-tests`, `import`, `mcp`, `init`. |
 
-## Empezar
+## Getting started
 
 ```bash
-dotnet new tool-manifest               # herramienta local del repo: se invoca como "dotnet spectrace"
+dotnet new tool-manifest               # local tool for the repo: invoked as "dotnet spectrace"
 dotnet tool install SpecTrace.Tool --prerelease
-dotnet spectrace init                 # spectrace.json, specs/example.spec.md, la skill y .mcp.json
-dotnet add src/MiApp package SpecTrace
-dotnet add tests/MiApp.Tests package SpecTrace
+dotnet spectrace init                  # spectrace.json, specs/example.spec.md, the agent skill and .mcp.json
+dotnet add src/MyApp package SpecTrace --prerelease
+dotnet add tests/MyApp.Tests package SpecTrace --prerelease
 dotnet build
 ```
 
-Si prefieres instalarla global (`dotnet tool install -g SpecTrace.Tool --prerelease`), el comando es `spectrace`
-en vez de `dotnet spectrace`, también en `.mcp.json`.
+If you prefer a global install (`dotnet tool install -g SpecTrace.Tool --prerelease`), the command is `spectrace`
+instead of `dotnet spectrace`, including in `.mcp.json`.
 
-Configuración por MSBuild (opcional): `SpecTraceSpecsDir`, `SpecTraceNamespace`, `SpecTraceRole` (`Implementation` | `Tests`).
-Severidades con un `.globalconfig` (`is_global = true`), no `.editorconfig`, porque los avisos de cobertura se reportan sobre los `.md`.
+Optional MSBuild settings: `SpecTraceSpecsDir`, `SpecTraceNamespace`, `SpecTraceRole` (`Implementation` | `Tests`).
+Set severities in a `.globalconfig` (`is_global = true`) rather than `.editorconfig`, because coverage diagnostics are
+reported on the `.md` files.
 
-## Diagnósticos
+## Spec format
 
-| ID | Severidad | Qué significa |
+A requirement is a level 2–4 heading `ID: Title`, an optional status line, a statement (EARS recommended) and
+acceptance criteria `- AC-n: ...`.
+
+| Status | Meaning | Implementation and tests required |
 | --- | --- | --- |
-| ST0001 | Error | ID de requisito inexistente (code fix: ID parecido) |
-| ST0002 | Error | Criterio de aceptación inexistente (code fix: criterio válido) |
-| ST0003 | Warning | Requisito aprobado sin implementar |
-| ST0004 | Warning | Requisito implementado sin ningún test |
-| ST0005 | Info | Criterio de aceptación sin test |
-| ST0006 | Warning | Requisito deprecated referenciado (code fix: quitar la referencia) |
-| ST0007 | Error | ID duplicado en las specs |
-| ST0008 | Warning | Formato de la spec (sin criterios, sin enunciado, estado desconocido) |
-| ST0009 | Warning | ID no constante en el atributo |
-| ST0010 | Warning | El enunciado cambió después de revisarse: revisa la implementación |
-| ST0011 | Warning | Un criterio cambió después de revisarse: revisa sus tests |
+| `draft` / `proposed` | Under discussion | No |
+| `approved` (default) | Agreed, must be built | Yes |
+| `implemented` | Delivered | Yes |
+| `deprecated` | Retired | No; referencing it is a warning |
 
-Los tests con `Skip` o `[Ignore]` no cuentan como cobertura. Cada regla tiene su página en [`docs/rules`](docs/rules).
+## Diagnostics
 
-## Cambios en la spec (spectrace.lock)
+| ID | Severity | Meaning |
+| --- | --- | --- |
+| [ST0001](https://github.com/amondejar/spec-trace/blob/main/docs/rules/ST0001.md) | Error | Unknown requirement ID (code fix: closest existing ID) |
+| [ST0002](https://github.com/amondejar/spec-trace/blob/main/docs/rules/ST0002.md) | Error | Unknown acceptance criterion (code fix: a valid criterion) |
+| [ST0003](https://github.com/amondejar/spec-trace/blob/main/docs/rules/ST0003.md) | Warning | Approved requirement not implemented |
+| [ST0004](https://github.com/amondejar/spec-trace/blob/main/docs/rules/ST0004.md) | Warning | Implemented requirement without any test |
+| [ST0005](https://github.com/amondejar/spec-trace/blob/main/docs/rules/ST0005.md) | Info | Acceptance criterion without a test |
+| [ST0006](https://github.com/amondejar/spec-trace/blob/main/docs/rules/ST0006.md) | Warning | Deprecated requirement referenced (code fix: remove the reference) |
+| [ST0007](https://github.com/amondejar/spec-trace/blob/main/docs/rules/ST0007.md) | Error | Duplicate ID in the specs |
+| [ST0008](https://github.com/amondejar/spec-trace/blob/main/docs/rules/ST0008.md) | Warning | Spec format issue (no criteria, no statement, unknown status) |
+| [ST0009](https://github.com/amondejar/spec-trace/blob/main/docs/rules/ST0009.md) | Warning | Requirement ID in the attribute is not a constant |
+| [ST0010](https://github.com/amondejar/spec-trace/blob/main/docs/rules/ST0010.md) | Warning | The statement changed after review: review the implementation |
+| [ST0011](https://github.com/amondejar/spec-trace/blob/main/docs/rules/ST0011.md) | Warning | A criterion changed after review: review its tests |
 
-Una spec que cambia después de implementarse es el caso que más se escapa: el código y los tests siguen en verde, pero
-ya no cumplen lo que dice el texto. SpecTrace guarda en `spectrace.lock` una huella del enunciado y de cada criterio
-en el momento en que se revisaron, y avisa cuando cambian:
+Tests marked `Skip` or `[Ignore]` do not count as coverage.
+
+## Spec changes (spectrace.lock)
+
+A spec that changes after it was implemented is the case that slips through most often: code and tests stay green but
+no longer do what the text says. SpecTrace stores in `spectrace.lock` a fingerprint of each requirement's statement and
+criteria at the time they were reviewed, and warns when they change:
 
 ```bash
-dotnet spectrace lock                          # registra la versión actual de todos los requisitos activos
-dotnet spectrace lock --requirement ORD-001    # tras revisar un requisito concreto
-dotnet spectrace lock --check                  # en CI: falla si hay cambios sin revisar
+dotnet spectrace lock                          # record the current version of every active requirement
+dotnet spectrace lock --requirement ORD-001    # after reviewing one requirement
+dotnet spectrace lock --check                  # in CI: fail if there are unreviewed changes
 ```
 
-| Cambia | Aviso | Dónde | Qué revisar |
+| What changes | Diagnostic | Where | What to review |
 | --- | --- | --- | --- |
-| El enunciado | ST0010 | Proyecto de implementación, en la línea del requisito | Los miembros con `[Implements]` |
-| Un criterio | ST0011 | Proyecto de test, en la línea del criterio | Los tests con `[Verifies]` de ese criterio |
-| Título, estado o espacios | — | — | Nada: no cambian el comportamiento |
-| Se añade un criterio | ST0005 si no tiene test | — | Escribir su test |
+| The statement | ST0010 | Implementation project, on the requirement line | Members with `[Implements]` |
+| A criterion | ST0011 | Test project, on the criterion line | Tests with `[Verifies]` for that criterion |
+| Title, status or whitespace | — | — | Nothing: behavior is unchanged |
+| A new criterion | ST0005 if it has no test | — | Write its test |
 
-Haz commit de `spectrace.lock` junto con la revisión. El fichero tiene una línea por requisito, así que los diffs son
-legibles y los conflictos solo afectan al requisito tocado. Registrar una revisión es una decisión humana: la skill y
-el servidor MCP piden a los agentes que no ejecuten `lock` por su cuenta.
+Commit `spectrace.lock` together with the review. It has one line per requirement, so diffs are readable and conflicts
+only touch the requirement that changed. Recording a review is a human decision: the skill and the MCP server ask
+agents not to run `lock` on their own.
 
-## En el IDE
+## In the IDE
 
-Además de los code fixes de la tabla, sobre cualquier `[Implements]` o `[Verifies]` (Ctrl+. en Visual Studio y VS Code, Alt+Enter en Rider):
+Besides the code fixes listed above, on any `[Implements]` or `[Verifies]` (Ctrl+. in Visual Studio and VS Code,
+Alt+Enter in Rider):
 
-- **Usar constantes del catálogo de SpecTrace**: `"ORD-001"` → `Requirements.ORD_001`, `"AC-1"` → `AcceptanceCriteria.ORD_001.AC_1`.
-- **Generar tests de ORD-001 en MiApp.Tests**: crea `Specs/ORD_001_...Tests.cs` en el proyecto de tests con un test (con `Skip`) por cada criterio que aún no tiene test.
+- **Use SpecTrace catalog constants**: `"ORD-001"` → `Requirements.ORD_001`, `"AC-1"` → `AcceptanceCriteria.ORD_001.AC_1`.
+- **Generate tests for ORD-001 in MyApp.Tests**: creates `Specs/ORD_001_...Tests.cs` in the test project with one
+  test (marked `Skip`) per criterion that has no test yet.
 
-## En las pull requests (GitHub Actions)
+## In pull requests (GitHub Actions)
 
 ```yaml
 permissions:
@@ -122,42 +148,46 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: amondejar/spec-trace@v0.4
+      - uses: amondejar/spec-trace@v0.4.1
         with:
-          root: .              # carpeta con spectrace.json
-          fail-on-gaps: false  # true para bloquear la PR si hay huecos
-          fail-on-drift: true  # bloquear si la spec cambió y nadie revisó el código ni los tests
+          root: .              # folder containing spectrace.json
+          fail-on-gaps: false  # true to block the PR when there are gaps
+          fail-on-drift: true  # block when the spec changed and nobody reviewed code and tests
 ```
 
-La Action anota los huecos en los ficheros de la PR, añade el informe al resumen del job y mantiene un comentario
-con la matriz completa que se actualiza en cada push. Expone las salidas `gaps` (requisitos con huecos) y `drift` (requisitos cuya spec cambió sin revisar).
-Para otros sistemas de CI: `dotnet spectrace report --fail-on-gaps` (Markdown) o `--format json`.
+The Action annotates gaps on the PR files, adds the report to the job summary and keeps one comment with the full
+matrix, updated on every push. It exposes the outputs `gaps` (requirements with gaps) and `drift` (requirements whose
+spec changed without review). For other CI systems: `dotnet spectrace report --fail-on-gaps --fail-on-drift`
+(Markdown) or `--format json`.
 
-## Para agentes de IA
+## For AI coding agents
 
 ### Skill
 
-`dotnet spectrace init` instala `.claude/skills/spectrace/SKILL.md` (formato Agent Skills; con `--skills-dir`
-se coloca donde lo lea tu agente). La skill le dice al agente que parta de la spec, cargue el requisito antes de
-implementar y no dé el trabajo por terminado mientras queden diagnósticos ST.
+`dotnet spectrace init` installs `.claude/skills/spectrace/SKILL.md` (Agent Skills format; use `--skills-dir` to place
+it where your agent reads skills). The skill tells the agent to start from the spec, load the requirement before
+implementing, read the existing code instead of guessing types, and not to consider the work done while ST
+diagnostics remain.
 
-### Servidor MCP
+### MCP server
 
-`dotnet spectrace mcp` arranca un servidor [Model Context Protocol](https://modelcontextprotocol.io) por stdio, sin dependencias externas:
+`dotnet spectrace mcp` starts a [Model Context Protocol](https://modelcontextprotocol.io) server over stdio, with no
+external dependencies:
 
-| Herramienta | Tipo | Qué hace |
+| Tool | Kind | What it does |
 | --- | --- | --- |
-| `list_requirements` | lectura | Requisitos con su estado de trazabilidad; `only_gaps` para ver lo que falta y `only_changed` para ver specs cambiadas sin revisar |
-| `get_requirement` | lectura | Enunciado, criterios con estado, implementación actual, proyecto y `using` donde va el código, ficheros relacionados y marcas a usar |
-| `get_code` | lectura | Código relacionado con un requisito, dónde se declara un tipo o un fichero concreto (solo `.cs`, `.csproj` y `.md` de las carpetas de código y specs) |
-| `get_traceability_report` | lectura | Informe completo en Markdown o JSON |
-| `scaffold_tests` | escritura | Esqueletos de tests para los criterios sin test (no sobrescribe) |
-| `propose_requirement` | escritura | Añade un requisito `proposed` a una spec; una persona lo aprueba después |
+| `list_requirements` | read | Requirements with their traceability status; `only_gaps` for what is missing, `only_changed` for unreviewed spec changes |
+| `get_requirement` | read | Statement, criteria with status, current implementation, target project and `using`, related files and the exact attributes to use |
+| `get_code` | read | Code related to a requirement, where a type is declared, or a given file (only `.cs`, `.csproj` and `.md` under the code and spec folders) |
+| `get_traceability_report` | read | Full report in Markdown or JSON |
+| `scaffold_tests` | write | Test skeletons for criteria without tests (never overwrites) |
+| `propose_requirement` | write | Appends a `proposed` requirement to a spec; a person approves it later |
 
-Las rutas que recibe quedan confinadas al repositorio y a la carpeta de specs; `get_code` no lee `bin`, `obj`, `.git` ni ficheros de configuración o secretos. Implementa el handshake `initialize`
-(revisiones 2024-11-05 a 2025-11-25); los clientes que prefieren la revisión 2026-07-28 vuelven a él automáticamente.
+Paths are confined to the repository and the spec folder; `get_code` never reads `bin`, `obj`, `.git`, configuration
+or secrets. The server implements the `initialize` handshake (protocol revisions 2024-11-05 to 2025-11-25); clients
+that prefer revision 2026-07-28 fall back to it automatically.
 
-`dotnet spectrace init` crea `.mcp.json` (Claude Code y otros clientes que leen ese fichero). Para VS Code,
+`dotnet spectrace init` creates `.mcp.json` (Claude Code and other clients that read it). For VS Code,
 `.vscode/mcp.json`:
 
 ```json
@@ -168,56 +198,63 @@ Las rutas que recibe quedan confinadas al repositorio y a la carpeta de specs; `
 }
 ```
 
-### Demo con Microsoft Agent Framework
+### Microsoft Agent Framework demo
 
-[`samples/AgentDemo`](samples/AgentDemo) es un agente de Agent Framework que se conecta a este servidor MCP,
-consulta un requisito y propone el código y los tests que faltan. Funciona con cualquier endpoint compatible con
-la API de OpenAI (OpenAI, Ollama, LM Studio…).
+[`samples/AgentDemo`](https://github.com/amondejar/spec-trace/tree/main/samples/AgentDemo) is an Agent Framework agent
+that connects to this MCP server, studies a requirement and proposes the missing code and tests. It works with any
+OpenAI-compatible endpoint (OpenAI, Ollama, LM Studio, Claude's compatibility endpoint…).
 
-## Importar desde Spec Kit y OpenSpec
+## Import from Spec Kit and OpenSpec
 
 ```bash
-dotnet spectrace import speckit specs/              # cada specs/NNN-feature/spec.md → spectrace.spec.md al lado
-dotnet spectrace import openspec openspec/          # cada openspec/specs/<cap>/spec.md → specs/<cap>.spec.md
+dotnet spectrace import speckit specs/              # each specs/NNN-feature/spec.md → spectrace.spec.md next to it
+dotnet spectrace import openspec openspec/          # each openspec/specs/<cap>/spec.md → specs/<cap>.spec.md
 ```
 
-| Origen | Se convierte en |
+| Source | Becomes |
 | --- | --- |
-| Spec Kit: User Story N con sus Acceptance Scenarios | `PA1-US-N` con un criterio `AC-n` por escenario (`approved`) |
-| Spec Kit: `**FR-001**` | `PA1-FR-001` en estado `proposed` (Spec Kit no les da criterios propios) |
-| Spec Kit: `[NEEDS CLARIFICATION]` | El requisito queda `proposed` con una nota |
-| OpenSpec: `### Requirement:` y sus `#### Scenario:` | `AUTH-001` con un criterio por escenario |
-| OpenSpec: `openspec/changes/` | No se importa: son propuestas sin archivar |
+| Spec Kit: User Story N with its Acceptance Scenarios | `PA1-US-N` with one `AC-n` criterion per scenario (`approved`) |
+| Spec Kit: `**FR-001**` | `PA1-FR-001` as `proposed` (Spec Kit gives them no criteria of their own) |
+| Spec Kit: `[NEEDS CLARIFICATION]` | The requirement stays `proposed`, with a note |
+| OpenSpec: `### Requirement:` and its `#### Scenario:` | `AUTH-001` with one criterion per scenario |
+| OpenSpec: `openspec/changes/` | Not imported: unarchived proposals |
 
-El prefijo sale de la carpeta de la feature (`001-photo-albums` → `PA1`) o de la capacidad (`auth` → `AUTH`), y se
-puede fijar con `--prefix`. Reimportar es seguro: se conservan los IDs (en OpenSpec, por título), los estados que
-hayas cambiado y los criterios que añadas a mano a requisitos sin criterios. `--dry-run` muestra qué haría.
-Ejemplos en [`samples/Import`](samples/Import).
+The prefix comes from the feature folder (`001-photo-albums` → `PA1`) or the capability (`auth` → `AUTH`) and can be
+set with `--prefix`. Re-importing is safe: IDs (matched by title in OpenSpec), statuses you changed and criteria you
+added by hand to requirements without criteria are kept. `--dry-run` shows what would happen.
+Examples in [`samples/Import`](https://github.com/amondejar/spec-trace/tree/main/samples/Import).
 
-## Estructura
+## Repository layout
 
 ```text
-src/SpecTrace.Abstractions   atributos (netstandard2.0)
-src/SpecTrace.Analyzers      parser de specs, generador, analizador, build/*.props|targets (netstandard2.0)
-src/SpecTrace.CodeFixes      code fixes y refactorizaciones para el IDE (netstandard2.0)
-src/SpecTrace.Package        empaqueta analizador + code fixes como el paquete "SpecTrace"
-src/SpecTrace.Tool           CLI dotnet spectrace y servidor MCP (net8.0, RollForward Major)
-tests/SpecTrace.Tests        tests del parser, generador, analizador, code fixes, MCP e importadores
-docs/rules                   una página por diagnóstico
-action.yml                   GitHub Action para PRs
-samples/Orders               ejemplo completo con huecos intencionados (ORD-003 sin implementar, ORD-002 AC-2 sin test)
-                             y un cambio sin revisar (ORD-001 AC-2 cambió después del spectrace.lock)
-samples/Import               specs de ejemplo de Spec Kit y OpenSpec para probar la importación
-samples/AgentDemo            agente de Microsoft Agent Framework que usa el servidor MCP
+src/SpecTrace.Abstractions   attributes (netstandard2.0)
+src/SpecTrace.Analyzers      spec parser, generator, analyzer, build/*.props|targets (netstandard2.0)
+src/SpecTrace.CodeFixes      IDE code fixes and refactorings (netstandard2.0)
+src/SpecTrace.Package        packs analyzer + code fixes as the "SpecTrace" package
+src/SpecTrace.Tool           dotnet spectrace CLI and MCP server (net8.0, RollForward Major)
+tests/SpecTrace.Tests        tests for parser, generator, analyzer, code fixes, MCP, importers and lock
+docs/rules                   one page per diagnostic
+action.yml                   GitHub Action for pull requests
+samples/Orders               full example with intentional gaps (ORD-003 not implemented, ORD-002 AC-2 untested)
+                             and one unreviewed change (ORD-001 AC-2 changed after spectrace.lock)
+samples/Import               Spec Kit and OpenSpec example specs to try the importers
+samples/AgentDemo            Microsoft Agent Framework agent using the MCP server
 ```
 
-## Desarrollo
+## Development
 
 ```bash
 dotnet test tests/SpecTrace.Tests
-dotnet build samples/Orders/tests/Orders.Tests     # muestra ST0003, ST0005 y ST0011
+dotnet build samples/Orders/tests/Orders.Tests     # shows ST0003, ST0005 and ST0011
 dotnet run --project src/SpecTrace.Tool -- report --root samples/Orders
 dotnet pack src/SpecTrace.Abstractions -c Release -o artifacts
-dotnet pack src/SpecTrace.Package -c Release -o artifacts     # paquete "SpecTrace"
+dotnet pack src/SpecTrace.Package -c Release -o artifacts     # the "SpecTrace" package
 dotnet pack src/SpecTrace.Tool -c Release -o artifacts
 ```
+
+Releases are published to nuget.org from GitHub Actions with Trusted Publishing when a `v*` tag is pushed
+(`.github/workflows/release.yml`).
+
+## License
+
+[MIT](https://github.com/amondejar/spec-trace/blob/main/LICENSE)

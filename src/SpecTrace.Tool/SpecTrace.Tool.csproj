@@ -12,8 +12,8 @@
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>spectrace</ToolCommandName>
     <PackageId>SpecTrace.Tool</PackageId>
-    <Description>CLI de SpecTrace: informe de trazabilidad, servidor MCP para agentes de IA, importación de Spec Kit y OpenSpec, y esqueletos de tests xUnit.</Description>
-    <PackageTags>sdd;spec-driven-development;mcp;model-context-protocol;spec-kit;openspec;traceability;ai-agents</PackageTags>
+    <Description>The SpecTrace CLI (dotnet spectrace): traceability report, spec change review (spectrace.lock), MCP server for AI coding agents, import from Spec Kit and OpenSpec, and xUnit test scaffolding.</Description>
+    <PackageTags>sdd;spec-driven-development;requirements;traceability;mcp;model-context-protocol;spec-kit;openspec;ai-agents;dotnet-tool</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>
@@ -25,7 +25,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Parser de specs y plantilla de tests compartidos con el analizador. -->
+    <!-- Spec parser and test template shared with the analyzer. -->
     <ProjectReference Include="..\SpecTrace.Analyzers\SpecTrace.Analyzers.csproj" />
   </ItemGroup>
 

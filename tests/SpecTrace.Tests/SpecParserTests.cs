@@ -15,7 +15,7 @@ title: Pagos
 ---
 # Pagos
 
-## PAY-001: Cobrar con tarjeta
+## PAY-001: Pay by card
 **Status:** approved
 
 **EARS:** When the customer confirms the payment,
@@ -25,7 +25,7 @@ the system shall charge the card once.
 - [ ] AC-2: Given a declined card, then the order stays unpaid.
 
 ### Notas
-Texto que no es del requisito.
+Text that is not part of the requirement.
 ";
             var doc = SpecParser.Parse("pay.spec.md", text);
 
@@ -33,7 +33,7 @@ Texto que no es del requisito.
             Assert.Equal("Pagos", doc.Title);
             var req = Assert.Single(doc.Requirements);
             Assert.Equal("PAY-001", req.Id);
-            Assert.Equal("Cobrar con tarjeta", req.Title);
+            Assert.Equal("Pay by card", req.Title);
             Assert.Equal(SpecStatus.Approved, req.Status);
             Assert.Equal("When the customer confirms the payment, the system shall charge the card once.", req.Statement);
             Assert.Equal(new[] { "AC-1", "AC-2" }, req.Criteria.Select(c => c.Id).ToArray());
@@ -44,7 +44,7 @@ Texto que no es del requisito.
         [Fact]
         public void Requirement_ends_at_next_heading_of_same_or_higher_level()
         {
-            const string text = "## A-1: Uno\nThe system shall one.\n\n- AC-1: x\n\n## Otra sección\n- AC-2: no pertenece\n";
+            const string text = "## A-1: One\nThe system shall one.\n\n- AC-1: x\n\n## Another section\n- AC-2: does not belong\n";
 
             var req = Assert.Single(SpecParser.Parse("a.spec.md", text).Requirements);
 
@@ -64,7 +64,7 @@ Texto que no es del requisito.
         [Fact]
         public void Blockquotes_are_notes_not_statement()
         {
-            const string text = "## A-1: Uno\nStatus: proposed\n\n> Revisar con negocio.\n\nThe system shall one.\n\n- AC-1: x\n";
+            const string text = "## A-1: One\nStatus: proposed\n\n> Check with the business.\n\nThe system shall one.\n\n- AC-1: x\n";
 
             var req = Assert.Single(SpecParser.Parse("a.spec.md", text).Requirements);
 
@@ -74,7 +74,7 @@ Texto que no es del requisito.
         [Fact]
         public void Reports_unknown_status_and_missing_criteria()
         {
-            const string text = "## A-1: Uno\nStatus: wip\nThe system shall one.\n";
+            const string text = "## A-1: One\nStatus: wip\nThe system shall one.\n";
 
             var doc = SpecParser.Parse("a.spec.md", text);
 
@@ -85,7 +85,7 @@ Texto que no es del requisito.
         [Fact]
         public void Catalog_detects_duplicates_across_files()
         {
-            var a = SpecParser.Parse("a.spec.md", "## A-1: Uno\nThe system shall one.\n\n- AC-1: x\n");
+            var a = SpecParser.Parse("a.spec.md", "## A-1: One\nThe system shall one.\n\n- AC-1: x\n");
             var b = SpecParser.Parse("b.spec.md", "## A-1: Otro\nThe system shall two.\n\n- AC-1: y\n");
 
             var catalog = SpecCatalog.Build(new[] { a, b });

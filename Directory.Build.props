@@ -1,18 +1,23 @@
 <Project>
 
   <PropertyGroup>
-    <Version>0.4.0-preview.1</Version>
+    <Version>0.4.1-preview.1</Version>
     <Authors>SpecTrace contributors</Authors>
+    <Copyright>Copyright (c) 2026 SpecTrace contributors</Copyright>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/amondejar/spec-trace</PackageProjectUrl>
     <RepositoryUrl>https://github.com/amondejar/spec-trace</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageIcon>icon.png</PackageIcon>
+    <PackageReleaseNotes>https://github.com/amondejar/spec-trace/blob/main/CHANGELOG.md</PackageReleaseNotes>
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
     <Deterministic>true</Deterministic>
   </PropertyGroup>
 
   <ItemGroup Condition="'$(IsPackable)' != 'false'">
     <None Include="$(MSBuildThisFileDirectory)README.md" Pack="true" PackagePath="/" Visible="false" />
+    <None Include="$(MSBuildThisFileDirectory)assets/icon.png" Pack="true" PackagePath="/" Visible="false" />
   </ItemGroup>
 
 </Project>

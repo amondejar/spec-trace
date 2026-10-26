@@ -1,8 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <!--
-    Analizador + generador. Desde la v0.2 no se empaqueta directamente: el paquete "SpecTrace"
-    se construye desde SpecTrace.Package, que lo junta con los code fixes.
+    Analyzer + source generator. Not packed on its own since v0.2: the "SpecTrace" package is
+    built from SpecTrace.Package, which bundles it with the code fixes.
   -->
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
@@ -23,7 +23,7 @@
     <ProjectReference Include="..\SpecTrace.Abstractions\SpecTrace.Abstractions.csproj" />
   </ItemGroup>
 
-  <!-- Seguimiento de versiones de las reglas (RS2008). Al publicar una versión, mover las filas a Shipped. -->
+  <!-- Analyzer release tracking (RS2008). When shipping a release, move the rows to Shipped. -->
   <ItemGroup>
     <AdditionalFiles Include="AnalyzerReleases.Shipped.md" />
     <AdditionalFiles Include="AnalyzerReleases.Unshipped.md" />

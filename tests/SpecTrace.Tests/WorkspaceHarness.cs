@@ -18,9 +18,9 @@ using SpecTrace.CodeFixes;
 namespace SpecTrace.Tests
 {
     /// <summary>
-    /// Solución en memoria (AdhocWorkspace) con un proyecto de implementación y, opcionalmente, uno de tests,
-    /// tal como la vería el IDE: specs como AdditionalDocuments, catálogo generado y .globalconfig con las
-    /// propiedades de MSBuild.
+    /// In-memory solution (AdhocWorkspace) with an implementation project and, optionally, a test project,
+    /// as the IDE would see it: specs as AdditionalDocuments, the generated catalog and a .globalconfig with the
+    /// MSBuild properties.
     /// </summary>
     internal sealed class WorkspaceHarness : IDisposable
     {
@@ -41,7 +41,7 @@ namespace SpecTrace.Tests
                     .AddProjectReference(TestsId, new ProjectReference(AppId));
             }
 
-            if (!_workspace.TryApplyChanges(solution)) throw new InvalidOperationException("No se pudo crear la solución.");
+            if (!_workspace.TryApplyChanges(solution)) throw new InvalidOperationException("Could not create the solution.");
         }
 
         public ProjectId AppId { get; }
@@ -71,7 +71,7 @@ namespace SpecTrace.Tests
         {
             var text = (await document.GetTextAsync()).ToString();
             var index = text.IndexOf(atText, StringComparison.Ordinal);
-            if (index < 0) throw new ArgumentException($"'{atText}' no aparece en el documento");
+            if (index < 0) throw new ArgumentException($"'{atText}' does not appear in the document");
 
             var actions = new List<CodeAction>();
             var context = new CodeRefactoringContext(document, new TextSpan(index, 0), a => actions.Add(a), CancellationToken.None);
@@ -92,7 +92,7 @@ namespace SpecTrace.Tests
 
         private static Solution AddProject(Solution solution, ProjectId id, string name, string dir, string spec, string source, bool isTest)
         {
-            // El catálogo y los atributos de ensamblado los genera el generador real, igual que en un build.
+            // The catalog and assembly attributes come from the real generator, as in a build.
             var generated = TestHarness.Run(source, spec, isTestProject: isTest, assemblyName: name, rootNamespace: name).Generated;
 
             var info = ProjectInfo.Create(id, VersionStamp.Create(), name, name, LanguageNames.CSharp,
