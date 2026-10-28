@@ -25,7 +25,7 @@ namespace SpecTrace.Specs
     public sealed class SpecRequirement
     {
         public SpecRequirement(string id, string title, string statement, string status,
-            IReadOnlyList<SpecCriterion> criteria, string filePath, int line)
+            IReadOnlyList<SpecCriterion> criteria, string filePath, int line, string? source = null)
         {
             Id = id;
             Title = title;
@@ -34,6 +34,7 @@ namespace SpecTrace.Specs
             Criteria = criteria;
             FilePath = filePath;
             Line = line;
+            Source = source;
         }
 
         public string Id { get; }
@@ -42,6 +43,12 @@ namespace SpecTrace.Specs
         public string Status { get; }
         public IReadOnlyList<SpecCriterion> Criteria { get; }
         public string FilePath { get; }
+
+        /// <summary>
+        /// Where the requirement comes from (<c>Source:</c> line): a URL or a tracker reference such as
+        /// <c>#12</c>, <c>owner/repo#12</c> or <c>PROJ-42</c>. Metadata only: it is not part of the reviewed text.
+        /// </summary>
+        public string? Source { get; }
 
         /// <summary>Zero-based line of the heading.</summary>
         public int Line { get; }

@@ -23,12 +23,27 @@ checks it (diagnostics `ST0001`–`ST0011`).
    | `list_requirements` | Which requirements exist; with `only_gaps: true`, only what is missing |
    | `propose_requirement` | Add a new requirement to a spec with status `proposed` |
    | `scaffold_tests` | Create test skeletons for criteria without tests |
+   | `get_story` / `list_stories` | Read user stories from the issue tracker, and see which ones have no spec yet |
 
    Without MCP, the terminal equivalent is:
 
    ```bash
    dotnet spectrace context <ID>
    ```
+
+## Starting from a user story
+
+If the task is a user story or an issue (#12, a GitHub issue URL) rather than a requirement, turn it into a spec first
+and do not implement it in the same task:
+
+1. Read it with `get_story` (it also tells you which requirements already cite it).
+2. Check the related requirements (`list_requirements`, `get_requirement`) and code (`get_code`).
+3. Propose it with `propose_requirement`, passing `source` (the story) and `open_questions` (whatever the story does
+   not decide). One behaviour per requirement; criteria testable by a single test each; no invented rules.
+4. Stop: a person answers the questions and approves the requirement.
+
+The `story_to_spec` MCP prompt contains these steps in detail. `dotnet spectrace story <ref>` does the first step
+from the terminal.
 
 ## While implementing
 

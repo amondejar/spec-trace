@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text.Json.Nodes;
 using SpecTrace.Specs;
 using SpecTrace.Tool.Authoring;
+using SpecTrace.Tool.Stories;
 
 namespace SpecTrace.Tool.Mcp;
 
@@ -15,11 +16,14 @@ namespace SpecTrace.Tool.Mcp;
 public sealed class SpecTraceTools
 {
     private readonly SpecTraceConfig _config;
+    private readonly Lazy<IStoryTracker> _tracker;
     private readonly Dictionary<string, (JsonObject Definition, Func<JsonObject, JsonObject> Handler)> _tools;
 
-    public SpecTraceTools(SpecTraceConfig config)
+    /// <param name="tracker">Where user stories are read from. Default: GitHub Issues of this repository.</param>
+    public SpecTraceTools(SpecTraceConfig config, Func<IStoryTracker>? tracker = null)
     {
         _config = config;
+        _tracker = new Lazy<IStoryTracker>(tracker ?? (() => GitHubIssues.FromConfig(config)));
         _tools = new()
         {
             ["list_requirements"] = (Define("list_requirements", "List requirements",
@@ -76,8 +80,30 @@ public sealed class SpecTraceTools
                         ["minItems"] = 1,
                         ["description"] = "Acceptance criteria in Given/When/Then form, one per item.",
                     }),
-                    ("id", Str("Explicit ID. If omitted, the next number for the spec's prefix is used."))),
+                    ("id", Str("Explicit ID. If omitted, the next number for the spec's prefix is used.")),
+                    ("source", Str("Where the requirement comes from: a user story (#12, owner/repo#12, its URL) or any URL. Written as a Source: line.")),
+                    ("open_questions", new JsonObject
+                    {
+                        ["type"] = "array",
+                        ["items"] = new JsonObject { ["type"] = "string" },
+                        ["description"] = "What the source leaves undecided, one question per item. Written in the note for the person who approves the requirement.",
+                    })),
                 readOnly: false), ProposeRequirement),
+
+            ["get_story"] = (Define("get_story", "Read a user story",
+                "Reads a user story from the issue tracker (GitHub Issues): the user story, its acceptance criteria, notes and comments, " +
+                "and the requirements that already cite it in a Source: line. Use it before turning a story into a spec.",
+                Schema(new[] { "story" }, ("story", Str("The story: #12, owner/repo#12 or the issue URL."))),
+                readOnly: true), GetStory),
+
+            ["list_stories"] = (Define("list_stories", "List user stories",
+                "Lists the user stories of the issue tracker (by default, open GitHub issues with the configured label) and the " +
+                "requirements that come from each one. Use only_unspecified=true to see the stories that have no spec yet.",
+                Schema(
+                    ("label", Str("Only issues with this label. Default: trackers.github.label in spectrace.json (\"user-story\"); an empty string lists all issues.")),
+                    ("state", EnumOf("Issue state. Default: open.", "open", "closed", "all")),
+                    ("only_unspecified", Bool("If true, only stories that no requirement cites yet."))),
+                readOnly: true), ListStories),
         };
     }
 
@@ -91,7 +117,7 @@ public sealed class SpecTraceTools
         {
             return _tools[name].Handler(arguments);
         }
-        catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException or InvalidOperationException)
+        catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException or InvalidOperationException or StoryException)
         {
             // Execution errors go in the result (isError) so the model can correct itself.
             return Text(ex.Message, isError: true);
@@ -296,17 +322,92 @@ public sealed class SpecTraceTools
         if (!SpecWriter.IsValidId(id)) throw new ArgumentException($"'{id}' is not a valid ID (PREFIX-123).");
         if (catalog.TryGet(id, out var clash)) throw new ArgumentException($"ID {id} already exists in {clash.FilePath}.");
 
+        var source = OptionalString(args, "source")?.Trim();
+        if (source != null && _tracker.Value.TryParse(source, out var story)) source = story.Url;
+        var questions = (args["open_questions"] as JsonArray)?.Select(q => q?.GetValue<string>()).Where(q => !string.IsNullOrWhiteSpace(q)).Select(q => q!).ToList()
+            ?? new List<string>();
+
         var block = SpecWriter.Render(new RequirementDraft(id, title, SpecStatus.Proposed, statement, criteria,
-            Note: $"Proposed by an agent on {DateTime.Now:yyyy-MM-dd}. Review it and change the status to approved to enforce it."));
+            Note: $"Proposed by an agent on {DateTime.Now:yyyy-MM-dd}. Review it and change the status to approved to enforce it.")
+        {
+            Source = source,
+            OpenQuestions = questions,
+        });
 
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         var current = File.Exists(path) ? File.ReadAllText(path) : string.Empty;
         var separator = current.Length == 0 ? "" : current.EndsWith("\n\n", StringComparison.Ordinal) ? "" : current.EndsWith("\n", StringComparison.Ordinal) ? "\n" : "\n\n";
         File.WriteAllText(path, current + separator + block);
 
+        var siblings = source == null
+            ? new List<string>()
+            : catalog.Requirements.Where(r => r.Source != null && SameSource(r.Source, source)).Select(r => r.Id).ToList();
         return Text($"Added {id} ({title}) with Status: proposed to {TraceScanner.Relative(_config.Root, path)}. " +
-                    "It is not enforced until someone approves it (Status: approved).");
+                    "It is not enforced until someone approves it (Status: approved)." +
+                    (questions.Count > 0 ? $" {questions.Count} open question(s) recorded for the reviewer." : "") +
+                    (siblings.Count > 0 ? $" The same source is cited by {string.Join(", ", siblings)}." : ""));
     }
+
+    private bool SameSource(string a, string b) =>
+        _tracker.Value.TryParse(a, out var ra) && _tracker.Value.TryParse(b, out var rb)
+            ? ra.SameAs(rb)
+            : string.Equals(a.Trim(), b.Trim(), StringComparison.OrdinalIgnoreCase);
+
+    private JsonObject GetStory(JsonObject args)
+    {
+        var tracker = _tracker.Value;
+        var reference = Parse(tracker, RequiredString(args, "story"));
+        var story = tracker.Get(reference);
+        var specified = StoryReports.RequirementsFrom(TraceScanner.Scan(_config), tracker, reference);
+
+        var result = Text(StoryReports.Markdown(story, specified));
+        result["structuredContent"] = new JsonObject
+        {
+            ["key"] = story.Ref.Key,
+            ["url"] = story.Ref.Url,
+            ["title"] = story.Title,
+            ["state"] = story.State,
+            ["labels"] = new JsonArray(story.Labels.Select(l => (JsonNode)l).ToArray()),
+            ["user_story"] = story.Narrative,
+            ["acceptance_criteria"] = new JsonArray(story.AcceptanceCriteria.Select(c => (JsonNode)c).ToArray()),
+            ["requirements"] = new JsonArray(specified.Select(r => (JsonNode)r.Id).ToArray()),
+        };
+        return result;
+    }
+
+    private JsonObject ListStories(JsonObject args)
+    {
+        var tracker = _tracker.Value;
+        var label = args["label"] is JsonValue v && v.TryGetValue<string>(out var l) ? l : _config.Trackers.GitHub.Label;
+        var state = OptionalString(args, "state") ?? "open";
+        var onlyUnspecified = args["only_unspecified"]?.GetValue<bool>() ?? false;
+
+        var model = TraceScanner.Scan(_config);
+        var rows = tracker.List(new StoryQuery(label, state))
+            .Select(s => (Story: s, Specified: StoryReports.RequirementsFrom(model, tracker, s.Ref)))
+            .Where(r => !onlyUnspecified || r.Specified.Count == 0)
+            .ToList();
+
+        var repository = (tracker as GitHubIssues)?.DefaultRepository ?? tracker.Name;
+        var result = Text(StoryReports.List(rows, repository, label));
+        result["structuredContent"] = new JsonObject
+        {
+            ["stories"] = new JsonArray(rows.Select(r => (JsonNode)new JsonObject
+            {
+                ["key"] = r.Story.Ref.Key,
+                ["url"] = r.Story.Ref.Url,
+                ["title"] = r.Story.Title,
+                ["state"] = r.Story.State,
+                ["requirements"] = new JsonArray(r.Specified.Select(x => (JsonNode)x.Id).ToArray()),
+            }).ToArray()),
+        };
+        return result;
+    }
+
+    private static StoryRef Parse(IStoryTracker tracker, string text) =>
+        tracker is GitHubIssues github ? github.Parse(text)
+        : tracker.TryParse(text, out var reference) ? reference
+        : throw new ArgumentException($"'{text}' is not a {tracker.Name} story reference.");
 
     // ---------- Helpers ----------
 

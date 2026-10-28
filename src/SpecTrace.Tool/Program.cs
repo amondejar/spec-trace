@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using SpecTrace.Tool;
+using SpecTrace.Tool.Stories;
 
 return Cli.Run(args);
 
@@ -30,6 +31,16 @@ internal static class Cli
                             --project <dir>    folder of the test project (required)
                             --requirement <ID> only that requirement
                             --namespace <ns>   root namespace of the test project
+          story <ref>     A user story from the issue tracker (GitHub Issues) and the requirements that cite it.
+                            <ref>              #12, owner/repo#12 or the issue URL
+                            --format md|json
+          stories         User stories of the tracker and the requirements that come from each one.
+                            --label <name>     default: trackers.github.label in spectrace.json ("user-story"); "" = all
+                            --state open|closed|all
+                            --unspecified      only stories that no requirement cites yet
+                            --fail-on-unspecified
+                                               exit code 1 if a listed story has no requirement
+                            --format md|json
           mcp             MCP server over stdio for agents (Claude Code, VS Code, Agent Framework...).
           import speckit <path>
                           Imports GitHub Spec Kit specs (a spec.md or a specs/ folder).
@@ -45,6 +56,9 @@ internal static class Cli
 
         Common options:
           --root <dir>      folder to search spectrace.json from (default: the current one)
+
+        GitHub access: public repositories work without a token. For private ones set GITHUB_TOKEN or GH_TOKEN,
+        or log in with the GitHub CLI (gh auth login).
         """;
 
     public static int Run(string[] args)
@@ -108,6 +122,12 @@ internal static class Cli
                     return 0;
                 }
 
+                case "story":
+                    return ShowStory(opts, config);
+
+                case "stories":
+                    return ListStories(opts, config);
+
                 case "import":
                     return Import(opts, config);
 
@@ -123,12 +143,70 @@ internal static class Cli
                     return 1;
             }
         }
-        catch (ArgumentException ex)
+        catch (Exception ex) when (ex is ArgumentException or StoryException)
         {
             Console.Error.WriteLine(ex.Message);
             return 2;
         }
     }
+
+    private static int ShowStory(Options opts, SpecTraceConfig config)
+    {
+        var text = opts.Positional.FirstOrDefault() ?? throw new ArgumentException("Missing story: dotnet spectrace story #12");
+        var tracker = GitHubIssues.FromConfig(config);
+        var reference = tracker.Parse(text);
+        var story = tracker.Get(reference);
+        var specified = StoryReports.RequirementsFrom(TraceScanner.Scan(config), tracker, reference);
+
+        Console.WriteLine(opts.Get("format") == "json"
+            ? System.Text.Json.JsonSerializer.Serialize(new
+            {
+                key = story.Ref.Key,
+                url = story.Ref.Url,
+                title = story.Title,
+                state = story.State,
+                labels = story.Labels,
+                author = story.Author,
+                userStory = story.Narrative,
+                acceptanceCriteria = story.AcceptanceCriteria,
+                sections = story.Sections.Select(x => new { heading = x.Heading, text = x.Text }),
+                comments = story.Comments.Select(c => new { author = c.Author, createdAt = c.CreatedAt, body = c.Body }),
+                requirements = specified.Select(r => new { id = r.Id, title = r.Title, status = r.Status, spec = $"{r.FilePath}:{r.Line + 1}" }),
+            }, JsonOptions)
+            : StoryReports.Markdown(story, specified));
+        return 0;
+    }
+
+    private static int ListStories(Options opts, SpecTraceConfig config)
+    {
+        var tracker = GitHubIssues.FromConfig(config);
+        // "--label" without a value (or with "") lists all issues.
+        var label = opts.Has("label") ? opts.Get("label") ?? "" : config.Trackers.GitHub.Label;
+        var model = TraceScanner.Scan(config);
+        var rows = tracker.List(new StoryQuery(label, opts.Get("state") ?? "open", Limit: 500))
+            .Select(s => (Story: s, Specified: StoryReports.RequirementsFrom(model, tracker, s.Ref)))
+            .Where(r => !opts.Has("unspecified") || r.Specified.Count == 0)
+            .ToList();
+
+        Console.WriteLine(opts.Get("format") == "json"
+            ? System.Text.Json.JsonSerializer.Serialize(rows.Select(r => new
+            {
+                key = r.Story.Ref.Key,
+                url = r.Story.Ref.Url,
+                title = r.Story.Title,
+                state = r.Story.State,
+                labels = r.Story.Labels,
+                requirements = r.Specified.Select(x => x.Id),
+            }), JsonOptions)
+            : StoryReports.List(rows, tracker.DefaultRepository ?? "github", label));
+        return opts.Has("fail-on-unspecified") && rows.Any(r => r.Specified.Count == 0) ? 1 : 0;
+    }
+
+    private static readonly System.Text.Json.JsonSerializerOptions JsonOptions = new()
+    {
+        WriteIndented = true,
+        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+    };
 
     private static int Init(Options opts)
     {
@@ -145,7 +223,11 @@ internal static class Cli
             created.Add(TraceScanner.Relative(root, path));
         }
 
-        Create(SpecTraceConfig.FileName, "{\n  \"specs\": \"specs\",\n  \"sources\": [\"src\", \"tests\"]\n}\n");
+        // With a GitHub remote, user stories are read from its issues (dotnet spectrace story / stories, get_story).
+        var github = GitRemote.OriginRepository(root, "github.com");
+        Create(SpecTraceConfig.FileName, github == null
+            ? "{\n  \"specs\": \"specs\",\n  \"sources\": [\"src\", \"tests\"]\n}\n"
+            : "{\n  \"specs\": \"specs\",\n  \"sources\": [\"src\", \"tests\"],\n  \"trackers\": {\n    \"github\": { \"repository\": \"" + github + "\", \"label\": \"user-story\" }\n  }\n}\n");
         Create(Path.Combine("specs", "example.spec.md"), Template("example.spec.md"));
         Create(Path.GetRelativePath(root, Path.Combine(skillsDir, "spectrace", "SKILL.md")), Template("SKILL.md"));
         // MCP server registration for agents that read .mcp.json at the project root (for example Claude Code).

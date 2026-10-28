@@ -50,7 +50,7 @@ public static class Reports
             var impl = t.IsImplemented ? string.Join("<br>", t.Implementations.Select(Link)) : r.IsEnforced ? "**missing**" : "–";
             var tests = t.IsVerified ? string.Join("<br>", t.Verifications.Select(v => Link(v) + (v.Criterion != null ? $" ({v.Criterion})" : ""))) : r.IsEnforced ? "**missing**" : "–";
             var crit = r.Criteria.Count == 0 ? "–" : $"{t.CoveredCriteria}/{r.Criteria.Count}";
-            sb.AppendLine($"| [{r.Id}]({Href(r.FilePath, r.Line + 1)}) {Escape(r.Title)} | {r.Status} | {impl} | {tests} | {crit} |");
+            sb.AppendLine($"| [{r.Id}]({Href(r.FilePath, r.Line + 1)}) {Escape(r.Title)}{SourceSuffix(r)} | {r.Status} | {impl} | {tests} | {crit} |");
         }
 
         var gaps = model.Requirements.Where(t => t.HasGap).ToList();
@@ -206,6 +206,7 @@ public static class Reports
                 id = t.Requirement.Id,
                 title = t.Requirement.Title,
                 status = t.Requirement.Status,
+                source = t.Requirement.Source,
                 statement = t.Requirement.Statement,
                 spec = $"{t.Requirement.FilePath}:{t.Requirement.Line + 1}",
                 implementedBy = t.Implementations.Select(l => new { symbol = l.Symbol, location = $"{l.File}:{l.Line}" }),
@@ -252,7 +253,7 @@ public static class Reports
         var sb = new StringBuilder();
         sb.AppendLine($"# {r.Id}: {r.Title}");
         sb.AppendLine();
-        sb.AppendLine($"Status: {r.Status} · Spec: {r.FilePath}:{r.Line + 1}");
+        sb.AppendLine($"Status: {r.Status} · Spec: {r.FilePath}:{r.Line + 1}" + (r.Source != null ? $" · Source: {r.Source}" : ""));
         sb.AppendLine();
         if (t.HasDrift || (t.DriftInfo.Any && t.Requirement.IsEnforced))
         {
@@ -372,6 +373,23 @@ public static class Reports
     }
 
     private static string Link(TraceLink l) => $"`{l.Symbol}` ({l.File}:{l.Line})";
+
+    /// <summary>" · [#3](url)" after the title when the requirement has a Source: line.</summary>
+    private static string SourceSuffix(SpecRequirement r)
+    {
+        if (r.Source == null) return "";
+        if (!Uri.TryCreate(r.Source, UriKind.Absolute, out var uri) || (uri.Scheme != Uri.UriSchemeHttps && uri.Scheme != Uri.UriSchemeHttp))
+        {
+            return $" · {Escape(r.Source)}";
+        }
+
+        // .../issues/12 → #12 (GitHub); otherwise the last segment of the address (a Jira key such as RB-42).
+        var segments = uri.AbsolutePath.Trim('/').Split('/');
+        var label = segments.Length >= 2 && segments[^2] == "issues" ? "#" + segments[^1]
+            : segments.Length > 0 && segments[^1].Length > 0 ? segments[^1]
+            : uri.Host;
+        return $" · [{Escape(label)}]({uri.AbsoluteUri})";
+    }
 
     private static string Escape(string text) => text.Replace("|", "\\|");
 }

@@ -13,6 +13,9 @@ public sealed class SpecTraceConfig
     public string Specs { get; set; } = "specs";
     public string[] Sources { get; set; } = { "src", "tests" };
 
+    /// <summary>Issue trackers that user stories come from (v0.5: GitHub Issues).</summary>
+    public TrackersConfig Trackers { get; set; } = new();
+
     /// <summary>Looks for spectrace.json from <paramref name="start"/> upwards. Without a file: defaults.</summary>
     public static SpecTraceConfig Load(string start)
     {
@@ -34,4 +37,24 @@ public sealed class SpecTraceConfig
 
         return new SpecTraceConfig { Root = Path.GetFullPath(start) };
     }
+}
+
+public sealed class TrackersConfig
+{
+    public GitHubTrackerConfig GitHub { get; set; } = new();
+}
+
+public sealed class GitHubTrackerConfig
+{
+    /// <summary>"owner/repo". Default: GITHUB_REPOSITORY, then the "origin" remote of the git repository.</summary>
+    public string? Repository { get; set; }
+
+    /// <summary>Label of the issues that are user stories (dotnet spectrace stories). Empty: all issues.</summary>
+    public string Label { get; set; } = "user-story";
+
+    /// <summary>Web address, for GitHub Enterprise Server (https://github.example.com). Default https://github.com.</summary>
+    public string Url { get; set; } = "https://github.com";
+
+    /// <summary>REST API address. Default https://api.github.com, or &lt;url&gt;/api/v3 for GitHub Enterprise Server.</summary>
+    public string? ApiUrl { get; set; }
 }

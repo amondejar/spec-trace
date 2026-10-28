@@ -10,7 +10,7 @@ namespace SpecTrace.Tool.Mcp;
 
 /// <summary>
 /// Minimal Model Context Protocol server over stdio (JSON-RPC 2.0, one message per line).
-/// Implements the <c>initialize</c> lifecycle and the tools capability, with no external dependencies.
+/// Implements the <c>initialize</c> lifecycle and the tools and prompts capabilities, with no external dependencies.
 /// Clients speaking revision 2026-07-28 first ask for <c>server/discover</c>; on
 /// "method not found" they fall back to the <c>initialize</c> handshake, which is the one implemented here.
 /// </summary>
@@ -50,9 +50,9 @@ public sealed class McpServer
     private readonly SpecTraceTools _tools;
     private readonly TextWriter _log;
 
-    public McpServer(SpecTraceConfig config, TextWriter? log = null)
+    public McpServer(SpecTraceConfig config, TextWriter? log = null, Func<Stories.IStoryTracker>? tracker = null)
     {
-        _tools = new SpecTraceTools(config);
+        _tools = new SpecTraceTools(config, tracker);
         _log = log ?? TextWriter.Null;
     }
 
@@ -100,7 +100,7 @@ public sealed class McpServer
         if (method == null)
         {
             // Response to a server request: this server sends no requests, so it is ignored.
-            return isNotification ? null : Error(id, InvalidRequest, "Falta 'method'");
+            return isNotification ? null : Error(id, InvalidRequest, "Missing 'method'");
         }
 
         _log.WriteLine($"[spectrace mcp] <- {method}");
@@ -120,6 +120,8 @@ public sealed class McpServer
                 "ping" => Result(id, new JsonObject()),
                 "tools/list" => Result(id, new JsonObject { ["tools"] = _tools.Definitions() }),
                 "tools/call" => CallTool(id, @params),
+                "prompts/list" => Result(id, new JsonObject { ["prompts"] = SpecTracePrompts.List() }),
+                "prompts/get" => GetPrompt(id, @params),
                 _ => Error(id, MethodNotFound, $"Method not supported: {method}"),
             };
         }
@@ -141,6 +143,7 @@ public sealed class McpServer
             ["capabilities"] = new JsonObject
             {
                 ["tools"] = new JsonObject { ["listChanged"] = false },
+                ["prompts"] = new JsonObject { ["listChanged"] = false },
             },
             ["serverInfo"] = new JsonObject
             {
@@ -155,18 +158,36 @@ public sealed class McpServer
                 "Mark the code with [Implements(Requirements.ID)] and each test with [Verifies(Requirements.ID, AcceptanceCriteria.ID.AC_n)]. " +
                 "The work is done when list_requirements with only_gaps=true no longer returns that requirement. " +
                 "If a requirement has unreviewed spec changes (only_changed=true), review its code and tests and tell a person; " +
-                "do not record the review (dotnet spectrace lock) yourself.",
+                "do not record the review (dotnet spectrace lock) yourself. " +
+                "New work can start from a user story in the issue tracker: read it with get_story and turn it into a proposed requirement " +
+                "with propose_requirement (source = the story, open_questions = what it leaves undecided); list_stories shows the stories without a spec.",
         };
     }
 
     private JsonObject CallTool(JsonNode? id, JsonObject? @params)
     {
         var name = @params?["name"]?.GetValue<string>();
-        if (string.IsNullOrEmpty(name)) return Error(id, InvalidParams, "Falta 'name'");
+        if (string.IsNullOrEmpty(name)) return Error(id, InvalidParams, "Missing 'name'");
         if (!_tools.Exists(name!)) return Error(id, InvalidParams, $"Unknown tool: {name}");
 
         var arguments = @params?["arguments"] as JsonObject ?? new JsonObject();
         return Result(id, _tools.Call(name!, arguments));
+    }
+
+    private static JsonObject GetPrompt(JsonNode? id, JsonObject? @params)
+    {
+        var name = @params?["name"]?.GetValue<string>();
+        if (string.IsNullOrEmpty(name)) return Error(id, InvalidParams, "Missing 'name'");
+        if (!SpecTracePrompts.Exists(name!)) return Error(id, InvalidParams, $"Unknown prompt: {name}");
+
+        try
+        {
+            return Result(id, SpecTracePrompts.Get(name!, @params?["arguments"] as JsonObject));
+        }
+        catch (ArgumentException ex)
+        {
+            return Error(id, InvalidParams, ex.Message);
+        }
     }
 
     private static JsonObject Result(JsonNode? id, JsonNode result) =>

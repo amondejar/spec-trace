@@ -8,7 +8,14 @@ using SpecTrace.Specs;
 namespace SpecTrace.Tool.Authoring;
 
 /// <summary>A requirement ready to be written into a spec.</summary>
-public sealed record RequirementDraft(string Id, string Title, string Status, string Statement, IReadOnlyList<string> Criteria, string? Note = null);
+public sealed record RequirementDraft(string Id, string Title, string Status, string Statement, IReadOnlyList<string> Criteria, string? Note = null)
+{
+    /// <summary>Where it comes from (a story URL or reference): written as a <c>Source:</c> line.</summary>
+    public string? Source { get; init; }
+
+    /// <summary>What the source leaves undecided: written in the note, for the person who approves it.</summary>
+    public IReadOnlyList<string> OpenQuestions { get; init; } = Array.Empty<string>();
+}
 
 /// <summary>Writes requirements in the SpecTrace format and computes new IDs.</summary>
 public static class SpecWriter
@@ -20,10 +27,19 @@ public static class SpecWriter
         var sb = new StringBuilder();
         sb.Append("## ").Append(r.Id).Append(": ").AppendLine(OneLine(r.Title));
         sb.Append("Status: ").AppendLine(r.Status);
+        if (r.Source != null) sb.Append("Source: ").AppendLine(OneLine(r.Source));
         sb.AppendLine();
-        if (r.Note != null)
+
+        var questions = r.OpenQuestions.Where(q => !string.IsNullOrWhiteSpace(q)).ToList();
+        if (r.Note != null || questions.Count > 0)
         {
-            sb.Append("> ").AppendLine(OneLine(r.Note));
+            if (r.Note != null) sb.Append("> ").AppendLine(OneLine(r.Note));
+            if (questions.Count > 0)
+            {
+                sb.AppendLine("> Open questions:");
+                foreach (var q in questions) sb.Append("> - ").AppendLine(OneLine(q));
+            }
+
             sb.AppendLine();
         }
 

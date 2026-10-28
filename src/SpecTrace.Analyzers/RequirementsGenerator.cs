@@ -21,7 +21,8 @@ namespace SpecTrace.Analyzers
     [Generator(LanguageNames.CSharp)]
     public sealed class RequirementsGenerator : IIncrementalGenerator
     {
-        private const string Version = "0.4.0";
+        // The package version (Directory.Build.props), so the GeneratedCode attribute never goes stale.
+        private static readonly string Version = typeof(RequirementsGenerator).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";
 
         public void Initialize(IncrementalGeneratorInitializationContext context)
         {
@@ -165,6 +166,14 @@ namespace SpecTrace.Analyzers
             if (req.Statement.Length > 0)
             {
                 sb.AppendLine($"{indent}/// <remarks>{Xml(req.Statement)}</remarks>");
+            }
+
+            // A link to the story or ticket the requirement comes from, clickable in the IDE tooltip.
+            if (req.Source != null &&
+                Uri.TryCreate(req.Source, UriKind.Absolute, out var source) &&
+                (source.Scheme == Uri.UriSchemeHttps || source.Scheme == Uri.UriSchemeHttp))
+            {
+                sb.AppendLine($"{indent}/// <seealso href=\"{Xml(source.AbsoluteUri)}\">{Xml(req.Source)}</seealso>");
             }
         }
 

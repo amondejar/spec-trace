@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.5.0-preview.1
+
+### Added
+
+- **User stories from GitHub Issues.**
+  - `dotnet spectrace story <ref>`: a story (`#12`, `owner/repo#12` or its URL) with its user story, acceptance
+    criteria, notes, comments and the requirements that cite it. `--format json`.
+  - `dotnet spectrace stories`: the stories (issues with the `user-story` label by default) and the requirements that
+    come from each one; `--unspecified`, `--state`, `--label`, `--fail-on-unspecified`, `--format json`.
+  - MCP tools `get_story` and `list_stories`.
+  - Reads GitHub issue forms (`### As a`, `### I want`, `### So that`, `### Acceptance criteria`...), free-form issues
+    and comments. Pull requests are not stories.
+  - Configuration in `spectrace.json` (`trackers.github`: `repository`, `label`, `url`, `apiUrl` for GitHub Enterprise
+    Server). The repository defaults to `GITHUB_REPOSITORY`, then the `origin` remote. Credentials from `GITHUB_TOKEN`,
+    `GH_TOKEN` or a logged-in GitHub CLI; public repositories work without them. The build never calls the network.
+  - `dotnet spectrace init` adds `trackers.github` when the repository has a GitHub remote.
+- **`Source:` line in the spec format**: where a requirement comes from (a story reference or any URL), also accepted
+  as `> Source: ...` in a note and as a Markdown link. It is metadata: it is not part of the reviewed text, so adding or
+  changing it does not trigger ST0010/ST0011. The report links it next to the title (`· [#12](...)`), the JSON report
+  and `get_requirement` include it, and the generated constant has a `<seealso>` link to it.
+- `propose_requirement` accepts `source` (written as a `Source:` line, story references normalized to their URL) and
+  `open_questions` (written in the note for the reviewer), and says when the same story is already cited.
+- **MCP prompts**: `story_to_spec` (turn a story into proposed requirements without inventing rules) and
+  `implement_requirement`. Claude Code shows them as `/mcp__spectrace__story_to_spec` and
+  `/mcp__spectrace__implement_requirement`.
+
+### Fixed
+
+- The `GeneratedCode` attribute of the catalog now carries the package version (it said 0.4.0 in 0.4.1).
+- Two MCP error messages were still in Spanish.
+
 ## 0.4.1-preview.1
 
 ### Changed

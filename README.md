@@ -17,6 +17,8 @@ SpecTrace links **spec → code → test** at build time, in the IDE, in pull re
 - Roslyn analyzer and source generator: no extra build step, warnings show up next to the others.
 - Detects spec changes after review (`spectrace.lock`): when a requirement's text changes, the build names the code and tests to review.
 - `dotnet spectrace` CLI: traceability report, test scaffolding, import from Spec Kit and OpenSpec.
+- User stories from GitHub Issues: each requirement can point to the story it comes from, and agents turn stories into
+  proposed requirements without inventing what the story leaves open.
 - MCP server and Agent Skill so coding agents start from the spec and stop only when the build is clean.
 
 ## How it works
@@ -76,8 +78,26 @@ reported on the `.md` files.
 
 ## Spec format
 
-A requirement is a level 2–4 heading `ID: Title`, an optional status line, a statement (EARS recommended) and
-acceptance criteria `- AC-n: ...`.
+A requirement is a level 2–4 heading `ID: Title`, an optional status line, an optional source line, a statement
+(EARS recommended) and acceptance criteria `- AC-n: ...`.
+
+```markdown
+## BK-008: Move a booking
+Status: proposed
+Source: https://github.com/acme/room-booking/issues/3
+
+> Open questions:
+> - Can a booking be moved to another day?
+
+When the organizer moves an upcoming booking to a free time range on the same day,
+the system shall keep the booking with the new time range.
+
+- AC-1: Given a booking from 10:00 to 11:00 and the room free at 12:00, when it is moved to 12:00–13:00, then it is moved.
+```
+
+`Source:` says where the requirement comes from: a user story (`#3`, `owner/repo#3`, its URL) or any address. It is
+metadata, like `Status:`: changing it is not a spec change. The report links to it and the generated constant shows
+it in the IDE tooltip. Blockquotes (`> ...`) are notes for people and are not part of the requirement either.
 
 | Status | Meaning | Implementation and tests required |
 | --- | --- | --- |
@@ -148,7 +168,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: amondejar/spec-trace@v0.4.1
+      - uses: amondejar/spec-trace@v0.5.0
         with:
           root: .              # folder containing spectrace.json
           fail-on-gaps: false  # true to block the PR when there are gaps
@@ -181,7 +201,16 @@ external dependencies:
 | `get_code` | read | Code related to a requirement, where a type is declared, or a given file (only `.cs`, `.csproj` and `.md` under the code and spec folders) |
 | `get_traceability_report` | read | Full report in Markdown or JSON |
 | `scaffold_tests` | write | Test skeletons for criteria without tests (never overwrites) |
-| `propose_requirement` | write | Appends a `proposed` requirement to a spec; a person approves it later |
+| `propose_requirement` | write | Appends a `proposed` requirement to a spec, with its `source` and `open_questions`; a person approves it later |
+| `get_story` | read | A user story from GitHub Issues: user story, acceptance criteria, notes, comments and the requirements that cite it |
+| `list_stories` | read | User stories and the requirements that come from each one; `only_unspecified` for the stories without a spec |
+
+It also offers two MCP prompts, which Claude Code shows as slash commands:
+
+| Prompt | Argument | What it asks the agent |
+| --- | --- | --- |
+| `story_to_spec` | `story` | Turn a user story into proposed requirements: EARS statement, testable criteria, open questions, no invented rules |
+| `implement_requirement` | `id` | Implement a requirement with one test per criterion and stop when the build is clean |
 
 Paths are confined to the repository and the spec folder; `get_code` never reads `bin`, `obj`, `.git`, configuration
 or secrets. The server implements the `initialize` handshake (protocol revisions 2024-11-05 to 2025-11-25); clients
@@ -224,6 +253,45 @@ set with `--prefix`. Re-importing is safe: IDs (matched by title in OpenSpec), s
 added by hand to requirements without criteria are kept. `--dry-run` shows what would happen.
 Examples in [`samples/Import`](https://github.com/amondejar/spec-trace/tree/main/samples/Import).
 
+## User stories (GitHub Issues)
+
+Work often starts as a user story in the issue tracker. SpecTrace reads it, so that the spec, not the ticket, is what
+the code is checked against, and every requirement keeps a link to the story it came from.
+
+```bash
+dotnet spectrace story #12            # the story, its acceptance criteria, comments, and the requirements that cite it
+dotnet spectrace stories --unspecified # stories with the "user-story" label that no requirement cites yet
+```
+
+With an agent, the `story_to_spec` prompt (in Claude Code, `/mcp__spectrace__story_to_spec 12`) reads the story with
+`get_story`, checks the existing requirements and code, and proposes requirements with `Source:` pointing to the story
+and the open questions in a note. It does not approve or implement anything: a person reviews the proposal, answers
+the questions and changes the status to `approved`, and from then on the build enforces it.
+
+Configuration in `spectrace.json` (all optional):
+
+```json
+{
+  "trackers": {
+    "github": {
+      "repository": "acme/room-booking",
+      "label": "user-story"
+    }
+  }
+}
+```
+
+- `repository`: default `GITHUB_REPOSITORY`, then the `origin` remote of the git repository.
+- `label`: issues that are user stories, for `stories` / `list_stories`; `""` for all issues.
+- `url` / `apiUrl`: for GitHub Enterprise Server (`https://github.example.com`, API at `<url>/api/v3`).
+
+Public repositories work without credentials. For private ones, SpecTrace uses `GITHUB_TOKEN` or `GH_TOKEN`, or the
+token of a logged-in GitHub CLI (`gh auth login`); the token only needs read access to issues and is only sent to the
+configured GitHub API. Nothing in the build calls the network: stories are read only by `story`, `stories` and the
+MCP tools. A GitHub issue form for stories (As a / I want / So that / Acceptance criteria) gives the best results;
+see [room-booking](https://github.com/amondejar/room-booking/blob/main/.github/ISSUE_TEMPLATE/user-story.yml)
+for an example. Jira is next.
+
 ## Repository layout
 
 ```text
@@ -231,7 +299,7 @@ src/SpecTrace.Abstractions   attributes (netstandard2.0)
 src/SpecTrace.Analyzers      spec parser, generator, analyzer, build/*.props|targets (netstandard2.0)
 src/SpecTrace.CodeFixes      IDE code fixes and refactorings (netstandard2.0)
 src/SpecTrace.Package        packs analyzer + code fixes as the "SpecTrace" package
-src/SpecTrace.Tool           dotnet spectrace CLI and MCP server (net8.0, RollForward Major)
+src/SpecTrace.Tool           dotnet spectrace CLI, MCP server and story trackers (net8.0, RollForward Major)
 tests/SpecTrace.Tests        tests for parser, generator, analyzer, code fixes, MCP, importers and lock
 docs/rules                   one page per diagnostic
 action.yml                   GitHub Action for pull requests

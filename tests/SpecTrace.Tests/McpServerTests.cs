@@ -25,7 +25,7 @@ namespace SpecTrace.Tests
             File.WriteAllText(Path.Combine(_root, "src", "App.csproj"),
                 "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><RootNamespace>Shop.App</RootNamespace></PropertyGroup></Project>");
             File.WriteAllText(Path.Combine(_root, "src", "Order.cs"), "namespace Shop.App;\npublic sealed class Order { public decimal Total => 0m; }\n");
-            File.WriteAllText(Path.Combine(_root, "src", "appsettings.Secret.json"), "{ \"ApiKey\": \"no-debe-leerse\" }");
+            File.WriteAllText(Path.Combine(_root, "src", "appsettings.Secret.json"), "{ \"ApiKey\": \"must-not-be-read\" }");
             Directory.CreateDirectory(Path.Combine(_root, "src", "obj"));
             File.WriteAllText(Path.Combine(_root, "src", "obj", "Generated.cs"), "class Generated { }");
             File.WriteAllText(Path.Combine(_root, "specs", "orders.spec.md"), @"# Orders
@@ -59,7 +59,7 @@ public class OrderTests
             try { Directory.Delete(_root, recursive: true); } catch (IOException) { }
         }
 
-        private JsonObject Send(string json) => _server.Handle(json) ?? throw new InvalidOperationException("Sin respuesta");
+        private JsonObject Send(string json) => _server.Handle(json) ?? throw new InvalidOperationException("No response");
 
         private JsonObject Call(string tool, string arguments) =>
             (JsonObject)Send($"{{\"jsonrpc\":\"2.0\",\"id\":7,\"method\":\"tools/call\",\"params\":{{\"name\":\"{tool}\",\"arguments\":{arguments}}}}}")["result"]!;
@@ -97,8 +97,10 @@ public class OrderTests
             var tools = (JsonArray)Send("{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/list\"}")["result"]!["tools"]!;
 
             var readOnly = tools.ToDictionary(t => t!["name"]!.GetValue<string>(), t => t!["annotations"]!["readOnlyHint"]!.GetValue<bool>());
-            Assert.Equal(6, readOnly.Count);
+            Assert.Equal(8, readOnly.Count);
             Assert.True(readOnly["get_requirement"]);
+            Assert.True(readOnly["get_story"]);
+            Assert.True(readOnly["list_stories"]);
             Assert.True(readOnly["get_code"]);
             Assert.False(readOnly["propose_requirement"]);
             Assert.All(tools, t => Assert.Equal("object", t!["inputSchema"]!["type"]!.GetValue<string>()));

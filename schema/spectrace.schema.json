@@ -16,6 +16,39 @@
       "description": "Folders with the code and tests scanned by the CLI (report, context, get_code...).",
       "items": { "type": "string" },
       "default": ["src", "tests"]
+    },
+    "trackers": {
+      "type": "object",
+      "description": "Issue trackers that user stories come from.",
+      "properties": {
+        "github": {
+          "type": "object",
+          "description": "GitHub Issues.",
+          "properties": {
+            "repository": {
+              "type": "string",
+              "description": "owner/repo. Default: GITHUB_REPOSITORY, then the origin remote.",
+              "pattern": "^[A-Za-z0-9-_.]+/[A-Za-z0-9-_.]+$"
+            },
+            "label": {
+              "type": "string",
+              "description": "Label of the issues that are user stories. Empty: all issues.",
+              "default": "user-story"
+            },
+            "url": {
+              "type": "string",
+              "description": "Web address, for GitHub Enterprise Server.",
+              "default": "https://github.com"
+            },
+            "apiUrl": {
+              "type": "string",
+              "description": "REST API address. Default: https://api.github.com, or <url>/api/v3 for GitHub Enterprise Server."
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
     }
   },
   "additionalProperties": false

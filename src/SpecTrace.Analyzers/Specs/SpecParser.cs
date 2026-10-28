@@ -23,6 +23,14 @@ namespace SpecTrace.Specs
             @"^\s*(?:[-*>]\s*)?\*{0,2}status\*{0,2}\s*:\s*\*{0,2}\s*`?(?<status>[A-Za-z-]+)",
             RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
+        // "Source: <url or reference>", also inside a note ("> Source: ..."). Only the first token counts, so a
+        // comment after the reference is allowed: "Source: #12 (from the planning meeting)".
+        private static readonly Regex SourceLine = new Regex(
+            @"^\s*(?:[-*>]\s*)?\*{0,2}source\*{0,2}\s*:\s*\*{0,2}\s*(?<value>\S.*?)\s*$",
+            RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+        private static readonly Regex MarkdownLink = new Regex(@"^\[[^\]]*\]\((?<url>[^)\s]+)\)", RegexOptions.Compiled);
+
         private static readonly Regex CriterionLine = new Regex(
             @"^\s*[-*]\s+(?:\[[ xX]\]\s+)?\*{0,2}(?<id>AC-\d+)\*{0,2}\s*:\s*(?<text>.+?)\s*$",
             RegexOptions.Compiled);
@@ -111,6 +119,17 @@ namespace SpecTrace.Specs
                     continue;
                 }
 
+                // Metadata before the statement: where the requirement comes from.
+                if (current.Source == null && current.Statement.Count == 0 && !current.StatementClosed)
+                {
+                    var source = SourceLine.Match(line);
+                    if (source.Success)
+                    {
+                        current.Source = SourceValue(source.Groups["value"].Value);
+                        continue;
+                    }
+                }
+
                 var criterion = CriterionLine.Match(line);
                 if (criterion.Success)
                 {
@@ -182,7 +201,19 @@ namespace SpecTrace.Specs
                     filePath, b.Line));
             }
 
-            requirements.Add(new SpecRequirement(b.Id, b.Title, statement, status, b.Criteria, filePath, b.Line));
+            requirements.Add(new SpecRequirement(b.Id, b.Title, statement, status, b.Criteria, filePath, b.Line, b.Source));
+        }
+
+        /// <summary>The reference of a <c>Source:</c> line: a Markdown link's URL, or the first token.</summary>
+        internal static string? SourceValue(string value)
+        {
+            value = value.Trim();
+            var link = MarkdownLink.Match(value);
+            if (link.Success) return link.Groups["url"].Value;
+
+            var token = value.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
+            token = token?.Trim('<', '>', '`', ',', ';', '*');
+            return string.IsNullOrEmpty(token) ? null : token;
         }
 
         private sealed class Builder
@@ -201,6 +232,7 @@ namespace SpecTrace.Specs
             public int Line { get; }
             public string? Status { get; set; }
             public int? StatusLine { get; set; }
+            public string? Source { get; set; }
             public List<string> Statement { get; } = new List<string>();
             public bool StatementClosed { get; set; }
             public List<SpecCriterion> Criteria { get; } = new List<SpecCriterion>();
