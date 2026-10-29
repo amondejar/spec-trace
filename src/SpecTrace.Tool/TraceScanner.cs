@@ -12,7 +12,12 @@ namespace SpecTrace.Tool;
 public enum LinkKind { Implements, Verifies }
 
 /// <summary>An [Implements] or [Verifies] mark found in the code.</summary>
-public sealed record TraceLink(LinkKind Kind, string RequirementId, string? Criterion, string Symbol, string File, int Line);
+/// <param name="Line">1-based line of the attribute.</param>
+/// <param name="SpanStart">1-based first line of the member (or type) the mark is on, attributes included.</param>
+/// <param name="SpanEnd">1-based last line of that member or type.</param>
+/// <param name="Namespace">Namespace of the type, to tell apart test classes with the same name.</param>
+public sealed record TraceLink(LinkKind Kind, string RequirementId, string? Criterion, string Symbol, string File, int Line,
+    int SpanStart = 0, int SpanEnd = 0, string? Namespace = null);
 
 /// <summary>Traceability status of a requirement.</summary>
 public sealed record RequirementTrace(SpecRequirement Requirement, IReadOnlyList<TraceLink> Implementations, IReadOnlyList<TraceLink> Verifications,
@@ -52,9 +57,27 @@ public sealed record ProjectInfo(string Name, string Directory, string CatalogNa
 }
 
 public sealed record TraceModel(string Root, SpecCatalog Catalog, IReadOnlyList<RequirementTrace> Requirements,
-    IReadOnlyList<TraceLink> UnknownLinks, IReadOnlyList<ProjectInfo> Projects, SpecLock? Lock = null)
+    IReadOnlyList<TraceLink> UnknownLinks, IReadOnlyList<ProjectInfo> Projects, SpecLock? Lock = null,
+    Results.TestResults? TestResults = null)
 {
     public bool HasLock => Lock != null;
+
+    public bool HasTestResults => TestResults != null;
+
+    /// <summary>How the test behind a [Verifies] mark ended, or null without test results.</summary>
+    public Results.TestOutcome? OutcomeOf(TraceLink verification) =>
+        TestResults?.OutcomeOf(verification.Symbol, verification.Namespace);
+
+    /// <summary>
+    /// How a criterion's tests ended: Failed if any failed, Passed if one passed and none failed, NotRun otherwise.
+    /// Null without test results or when the criterion has no test.
+    /// </summary>
+    public Results.TestOutcome? OutcomeOf(RequirementTrace trace, string criterionId)
+    {
+        if (TestResults == null) return null;
+        var tests = trace.Verifications.Where(v => v.Criterion == criterionId).ToList();
+        return tests.Count == 0 ? null : tests.Min(v => OutcomeOf(v)!.Value);
+    }
 
     /// <summary>The innermost project containing the file (or null).</summary>
     public ProjectInfo? ProjectOf(string relativeFile) =>
@@ -201,8 +224,12 @@ public static class TraceScanner
             if (id == null) continue;
             var criterion = args.Arguments.Count > 1 ? ResolveCriterion(args.Arguments[1].Expression) : null;
             var line = attr.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
+            var owner = (SyntaxNode?)attr.Ancestors().OfType<MemberDeclarationSyntax>().FirstOrDefault() ?? attr;
+            var span = owner.GetLocation().GetLineSpan();
+            var ns = attr.Ancestors().OfType<BaseNamespaceDeclarationSyntax>().FirstOrDefault()?.Name.ToString();
 
-            yield return new TraceLink(kind.Value, id, criterion, Owner(attr), Relative(root, path), line);
+            yield return new TraceLink(kind.Value, id, criterion, Owner(attr), Relative(root, path), line,
+                span.StartLinePosition.Line + 1, span.EndLinePosition.Line + 1, ns);
         }
     }
 

@@ -19,6 +19,10 @@ public static class SpecTracePrompts
             "Reads a user story from the issue tracker and proposes a requirement with an EARS statement, testable acceptance criteria and the open questions the story leaves.",
             "story", "The story: #12, owner/repo#12 or the issue URL.",
             StoryToSpec),
+        new("review_spec", "Review a spec before approving it",
+            "Reviews a requirement (or every requirement of a spec file) for what makes it hard to build or test: ambiguity, statement and criteria that disagree, missing cases and conflicts with other requirements.",
+            "target", "A requirement ID (BK-008) or a spec file (bookings.spec.md).",
+            ReviewSpec),
         new("implement_requirement", "Implement a requirement",
             "Implements an approved requirement with one test per acceptance criterion, following the traceability rules of SpecTrace.",
             "id", "Requirement ID, for example ORD-002.",
@@ -88,6 +92,27 @@ public static class SpecTracePrompts
 
         Finish with: the requirement IDs and files, which criteria came from the story and which from existing rules,
         and the open questions.
+        """;
+
+    private static string ReviewSpec(string target) => $"""
+        Review {target} before it is approved. Do not change any file: report what you find, so a person decides.
+
+        1. Read it with get_requirement (for a spec file, list_requirements and then get_requirement on each requirement in
+           it). Read the related requirements too, and get_code for the domain types it mentions.
+        2. Look for, in this order:
+           - Contradictions: the statement and the criteria disagree (a scope, a number, a unit, a limit), or two criteria
+             cannot both be true.
+           - Ambiguity: words that hide a number or a decision ("fast", "several", "appropriate"); an actor, a time or a
+             unit that is not said. The "Spec quality" section of get_requirement lists the obvious ones (ST0012–ST0014).
+           - Missing cases a tester would ask about: the error case of each criterion, boundaries (exactly the limit, one
+             over), permissions (another user), empty input, what happens at the same time from two places.
+           - Conflicts with other requirements: a rule that changes or bypasses an existing one (opening hours, capacity,
+             who can cancel...).
+           - Criteria that cannot be tested by a single test, or that test the implementation instead of the behaviour.
+        3. For each finding give: where (ID and AC), what is wrong in one sentence, and a proposed rewrite of the
+           statement or the criterion, or the question someone has to answer.
+
+        Finish with a verdict: ready to approve, ready after small fixes, or needs decisions (list them).
         """;
 
     private static string Implement(string id) => $"""

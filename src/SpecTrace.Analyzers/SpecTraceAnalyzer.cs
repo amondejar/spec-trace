@@ -27,6 +27,9 @@ namespace SpecTrace.Analyzers
             Diagnostics.NotVerified,
             Diagnostics.CriterionNotVerified,
             Diagnostics.DeprecatedRequirement,
+            Diagnostics.NotEars,
+            Diagnostics.VagueTerm,
+            Diagnostics.NoOutcome,
             Diagnostics.DuplicateInSpec,
             Diagnostics.SpecFormat,
             Diagnostics.NotConstant,
@@ -139,6 +142,18 @@ namespace SpecTrace.Analyzers
                         var rule = issue.Kind == SpecIssueKind.DuplicateRequirement || issue.Kind == SpecIssueKind.DuplicateCriterion
                             ? Diagnostics.DuplicateInSpec
                             : Diagnostics.SpecFormat;
+                        end.ReportDiagnostic(Diagnostic.Create(rule, At(issue.FilePath, issue.Line), issue.Message));
+                    }
+
+                    // How the requirements are written: EARS, vague words, criteria with an outcome.
+                    foreach (var issue in SpecLint.Check(catalog.Requirements))
+                    {
+                        var rule = issue.Kind switch
+                        {
+                            SpecQualityKind.NotEars => Diagnostics.NotEars,
+                            SpecQualityKind.VagueTerm => Diagnostics.VagueTerm,
+                            _ => Diagnostics.NoOutcome,
+                        };
                         end.ReportDiagnostic(Diagnostic.Create(rule, At(issue.FilePath, issue.Line), issue.Message));
                     }
 

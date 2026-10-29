@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.6.0-preview.1
+
+### Added
+
+- **Test results per criterion.** `report --test-results <path>` reads `.trx` files (`dotnet test --logger trx`;
+  xUnit, NUnit, MSTest) and shows whether each criterion's tests passed, failed or did not run: icons per test and per
+  requirement, "Acceptance criteria passing" in the summary, a "Failing criteria" section with the failure message,
+  `result`/`outcome` in the JSON report and error annotations on the criterion line. Theory rows combine (one failure
+  fails it); `[Verifies]` on a test class takes all its tests. `--fail-on-failing`.
+- **Requirements touched by a change.** `dotnet spectrace impact [--base <ref>]` and `report --base <ref>`: spec
+  changes against the base (new, statement, criteria added/changed/removed, status), members with `[Implements]` and
+  tests with `[Verifies]` on changed lines (deletions included), removed requirements and changed code that no
+  requirement covers. Works on pull request merge commits checked out shallow.
+- **Spec quality.** ST0012 (statement without *shall*, EARS), ST0013 (vague terms such as "fast", "user-friendly",
+  "etc.", "and/or", "rápido", "y/o"... in statements and criteria; warning) and ST0014 (criterion without an outcome).
+  Also in the report ("Spec quality"), the JSON (`specQuality`), the PR annotations and `get_requirement`.
+- MCP prompt `review_spec`: contradictions, ambiguity, missing cases and conflicts, before approving.
+- GitHub Action: inputs `test-results` and `impact` (on by default for pull requests), output `failing`.
+
+### Changed
+
+- The Markdown report puts the matrix under "All requirements" (after the impact section when there is one).
+- `init` in a subfolder uses the existing `spectrace.json` above it, or the root of the git repository, instead of
+  creating a second setup (`--here` to force the current folder), and only adds the example spec when there are no
+  specs yet.
+
 ## 0.5.1-preview.1
 
 ### Added

@@ -121,8 +121,16 @@ it in the IDE tooltip. Blockquotes (`> ...`) are notes for people and are not pa
 | [ST0009](https://github.com/amondejar/spec-trace/blob/main/docs/rules/ST0009.md) | Warning | Requirement ID in the attribute is not a constant |
 | [ST0010](https://github.com/amondejar/spec-trace/blob/main/docs/rules/ST0010.md) | Warning | The statement changed after review: review the implementation |
 | [ST0011](https://github.com/amondejar/spec-trace/blob/main/docs/rules/ST0011.md) | Warning | A criterion changed after review: review its tests |
+| [ST0012](https://github.com/amondejar/spec-trace/blob/main/docs/rules/ST0012.md) | Info | The statement does not say what the system *shall* do (EARS) |
+| [ST0013](https://github.com/amondejar/spec-trace/blob/main/docs/rules/ST0013.md) | Warning | Vague term that cannot be tested as written ("fast", "user-friendly", "etc.", "rápido"...) |
+| [ST0014](https://github.com/amondejar/spec-trace/blob/main/docs/rules/ST0014.md) | Info | Acceptance criterion without an observable outcome (*then* ...) |
 
 Tests marked `Skip` or `[Ignore]` do not count as coverage.
+
+ST0012–ST0014 check how requirements are written, before anyone builds them: a statement without *shall*, words that
+hide a number or a decision, criteria without an expected result. They run on `proposed` requirements too, because
+that is when fixing the text is cheap. Contradictions between the statement and the criteria need a reader: the
+`review_spec` MCP prompt asks an agent to review a requirement or a whole spec before it is approved.
 
 ## Spec changes (spectrace.lock)
 
@@ -167,17 +175,57 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: amondejar/spec-trace@v0.5.1
+      - uses: actions/setup-dotnet@v4
         with:
-          root: .              # folder containing spectrace.json
-          fail-on-gaps: false  # true to block the PR when there are gaps
-          fail-on-drift: true  # block when the spec changed and nobody reviewed code and tests
+          dotnet-version: 8.0.x
+      - run: dotnet test --logger trx --results-directory TestResults
+      - uses: amondejar/spec-trace@v0.6.0
+        if: always()                 # also when tests fail: the report says which criteria broke
+        with:
+          root: .                    # folder containing spectrace.json
+          test-results: TestResults  # .trx files: whether each criterion's tests pass
+          fail-on-gaps: false        # true to block the PR when there are gaps
+          fail-on-drift: true        # block when the spec changed and nobody reviewed code and tests
 ```
 
-The Action annotates gaps on the PR files, adds the report to the job summary and keeps one comment with the full
-matrix, updated on every push. It exposes the outputs `gaps` (requirements with gaps) and `drift` (requirements whose
-spec changed without review). For other CI systems: `dotnet spectrace report --fail-on-gaps --fail-on-drift`
-(Markdown) or `--format json`.
+On every pull request the Action:
+
+- starts the report with the **requirements the pull request touches**: which requirements' spec changed (and how),
+  which implementations and tests it edits, which requirements it removes and which changed code no requirement covers
+  (input `impact`, on by default);
+- shows whether each acceptance criterion's tests **pass** (✅ / ❌ / ⚪ not run) when given `test-results`, and
+  annotates failing criteria on the spec line;
+- annotates gaps and spec quality issues on the PR files, adds the report to the job summary and keeps one comment
+  with it, updated on every push.
+
+Outputs: `gaps`, `drift` and `failing` (criteria with a failing test). For other CI systems:
+`dotnet spectrace report --test-results TestResults --base origin/main --fail-on-gaps --fail-on-failing`, in Markdown
+or `--format json`.
+
+### Requirements touched by a change
+
+```bash
+dotnet spectrace impact              # compared with origin/main (or --base <ref>)
+```
+
+```text
+Compared with `origin/main`: 2 requirement(s) touched.
+
+| Requirement             | Spec          | Code                  | Tests                                  | Source |
+| BK-008 Move a booking   | new           | `BookingService.Move` | `BookingsApiTests.Moves_a_booking` (AC-1) | #3   |
+| BK-002 Prevent double…  | –             | `BookingService.FindConflict` | –                              | –      |
+```
+
+A requirement is touched when its spec text changed against the base (statement, a criterion, its status) or when the
+change edits lines of a member with `[Implements]` or a test with `[Verifies]` for it. Reviewers see the change as
+behaviour, and the product owner knows what to check again. Changed code that no requirement covers is listed too.
+
+### Test results
+
+`dotnet spectrace report --test-results <path>` reads the `.trx` files written by `dotnet test --logger trx` (xUnit,
+NUnit and MSTest) and shows, for every criterion, whether its tests passed, failed or did not run. A theory fails if
+any of its rows fails; a `[Verifies]` on a test class takes every test of the class. `--fail-on-failing` returns exit
+code 1 when a criterion has a failing test. SpecTrace never runs the tests: it reads their results.
 
 ## For AI coding agents
 
@@ -204,11 +252,12 @@ external dependencies:
 | `get_story` | read | A user story from GitHub Issues: user story, acceptance criteria, notes, comments and the requirements that cite it |
 | `list_stories` | read | User stories and the requirements that come from each one; `only_unspecified` for the stories without a spec |
 
-It also offers two MCP prompts, which Claude Code shows as slash commands:
+It also offers MCP prompts, which Claude Code shows as slash commands:
 
 | Prompt | Argument | What it asks the agent |
 | --- | --- | --- |
 | `story_to_spec` | `story` | Turn a user story into proposed requirements: EARS statement, testable criteria, open questions, no invented rules |
+| `review_spec` | `target` | Review a requirement or a spec file before approving it: contradictions, ambiguity, missing cases, conflicts |
 | `implement_requirement` | `id` | Implement a requirement with one test per criterion and stop when the build is clean |
 
 Paths are confined to the repository and the spec folder; `get_code` never reads `bin`, `obj`, `.git`, configuration

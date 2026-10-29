@@ -23,6 +23,11 @@ internal static class Cli
                             --out <file>       write to a file instead of the console
                             --fail-on-gaps     exit code 1 if active requirements are not implemented or not tested
                             --fail-on-drift    exit code 1 if there are unreviewed spec changes (spectrace.lock)
+                            --test-results <path>
+                                               .trx files or folders (dotnet test --logger trx): shows whether each
+                                               criterion's tests pass; repeatable
+                            --fail-on-failing  exit code 1 if a criterion has a failing test (needs --test-results)
+                            --base <ref>       adds the requirements touched since that branch (see impact)
           lock            Records the current version of the spec as reviewed (spectrace.lock).
                             --requirement <ID> only that requirement (repeatable); without it, all active ones
                             --check            does not write: exit code 1 if there are unreviewed changes
@@ -33,6 +38,10 @@ internal static class Cli
                             --fix              renumbers what this branch added (spec, spectrace.lock and the
                                                code and tests added by the branch); review it with git diff
                             --base <ref>       branch to compare with (default origin/main, origin/master, main...)
+          impact          Requirements touched by the current branch compared with its base: spec changes,
+                          implementation and tests on changed lines, removed requirements, untraced code.
+                            --base <ref>       default origin/main, origin/master, main or master
+                            --format md|json
           context <ID>    Requirement context for an agent: statement, criteria, status and how to mark the work.
           scaffold-tests  xUnit skeletons for criteria without tests.
                             --project <dir>    folder of the test project (required)
@@ -58,8 +67,11 @@ internal static class Cli
                             --prefix <P>       ID prefix (default: the capability name, e.g. AUTH)
                             --out <file>       output (single capability only); default <specs>/<capability>.spec.md
                           Common: --status approved|proposed (status of imported items with criteria), --dry-run
-          init            Creates spectrace.json, specs/example.spec.md, the agent skill and .mcp.json.
+          init            Creates what is missing of spectrace.json, an example spec, the agent skill, .mcp.json and
+                          the .gitattributes line for spectrace.lock. In a subfolder it uses the existing
+                          spectrace.json above, or the root of the git repository.
                             --skills-dir <dir> skills folder (default .claude/skills)
+                            --here             set up the current folder even inside another root
 
         Common options:
           --root <dir>      folder to search spectrace.json from (default: the current one)
@@ -86,20 +98,34 @@ internal static class Cli
                 case "report":
                 {
                     var model = TraceScanner.Scan(config);
+                    var results = opts.GetAll("test-results");
+                    if (results.Count > 0) model = model with { TestResults = SpecTrace.Tool.Results.TestResults.Load(results) };
                     var repoRoot = Environment.GetEnvironmentVariable("GITHUB_WORKSPACE") is { Length: > 0 } ws
                         ? ws
                         : Directory.GetCurrentDirectory();
+                    var impact = opts.Has("base") ? Impact.Compute(config, model, opts.Get("base")) : null;
                     var text = opts.Get("format") switch
                     {
-                        "json" => Reports.Json(model),
+                        "json" => Reports.Json(model, impact),
                         "github" => Reports.GitHub(model, repoRoot),
-                        "md" or null => Reports.Markdown(model, opts.Get("link-base")),
+                        "md" or null => Reports.Markdown(model, opts.Get("link-base"), impact),
                         var other => throw new ArgumentException($"Unknown format '{other}'. Use md, json or github."),
                     };
                     Write(text, opts.Get("out"));
                     var gaps = model.Requirements.Count(r => r.HasGap) + model.UnknownLinks.Count;
                     var drift = model.Requirements.Count(r => r.HasDrift);
-                    return (opts.Has("fail-on-gaps") && gaps > 0) || (opts.Has("fail-on-drift") && drift > 0) ? 1 : 0;
+                    var failing = model.Requirements.Sum(t => t.Requirement.Criteria.Count(c => model.OutcomeOf(t, c.Id) == SpecTrace.Tool.Results.TestOutcome.Failed));
+                    return (opts.Has("fail-on-gaps") && gaps > 0) || (opts.Has("fail-on-drift") && drift > 0) || (opts.Has("fail-on-failing") && failing > 0) ? 1 : 0;
+                }
+
+                case "impact":
+                {
+                    var model = TraceScanner.Scan(config);
+                    var impact = Impact.Compute(config, model, opts.Get("base"));
+                    Console.WriteLine(opts.Get("format") == "json"
+                        ? System.Text.Json.JsonSerializer.Serialize(Impact.Json(impact), JsonOptions)
+                        : Impact.Markdown(impact));
+                    return 0;
                 }
 
                 case "context":
@@ -260,7 +286,7 @@ internal static class Cli
 
     private static int Init(Options opts)
     {
-        var root = Path.GetFullPath(opts.Get("root") ?? Directory.GetCurrentDirectory());
+        var root = InitRoot(Directory.GetCurrentDirectory(), opts.Get("root"), opts.Has("here"), Console.Out);
         var skillsDir = Path.Combine(root, opts.Get("skills-dir") ?? Path.Combine(".claude", "skills"));
         var created = new List<string>();
 
@@ -278,7 +304,12 @@ internal static class Cli
         Create(SpecTraceConfig.FileName, github == null
             ? "{\n  \"specs\": \"specs\",\n  \"sources\": [\"src\", \"tests\"]\n}\n"
             : "{\n  \"specs\": \"specs\",\n  \"sources\": [\"src\", \"tests\"],\n  \"trackers\": {\n    \"github\": { \"repository\": \"" + github + "\", \"label\": \"user-story\" }\n  }\n}\n");
-        Create(Path.Combine("specs", "example.spec.md"), Template("example.spec.md"));
+        // The example only for a new setup: an existing specs folder with specs does not need it.
+        var specsDir = Path.Combine(root, SpecTraceConfig.Load(root).Specs);
+        if (!(Directory.Exists(specsDir) && Directory.EnumerateFiles(specsDir, "*" + SpecTrace.Specs.SpecParser.FileSuffix, SearchOption.AllDirectories).Any()))
+        {
+            Create(Path.Combine("specs", "example.spec.md"), Template("example.spec.md"));
+        }
         Create(Path.GetRelativePath(root, Path.Combine(skillsDir, "spectrace", "SKILL.md")), Template("SKILL.md"));
         // MCP server registration for agents that read .mcp.json at the project root (for example Claude Code).
         Create(".mcp.json", "{\n  \"mcpServers\": {\n    \"spectrace\": {\n      \"command\": \"dotnet\",\n      \"args\": [\"spectrace\", \"mcp\"]\n    }\n  }\n}\n");
@@ -298,6 +329,43 @@ internal static class Cli
         Console.WriteLine(created.Count == 0 ? "Everything already exists." : "Created:\n" + string.Join("\n", created.Select(c => "  " + c)));
         Console.WriteLine("\nNext step: add the package to your projects with  dotnet add package SpecTrace --prerelease");
         return 0;
+    }
+
+    /// <summary>
+    /// Where init works: --root as given; otherwise the folder of an existing spectrace.json above the current one
+    /// (so running it inside a project completes the repository's setup instead of creating a second one), then the git
+    /// top level, then the current folder. --here forces the current folder.
+    /// </summary>
+    internal static string InitRoot(string current, string? explicitRoot, bool here, TextWriter log)
+    {
+        if (explicitRoot != null) return Path.GetFullPath(explicitRoot);
+        current = Path.GetFullPath(current);
+        if (here) return current;
+
+        for (var dir = new DirectoryInfo(current); dir != null; dir = dir.Parent)
+        {
+            if (!File.Exists(Path.Combine(dir.FullName, SpecTraceConfig.FileName))) continue;
+            if (!string.Equals(dir.FullName, current, StringComparison.OrdinalIgnoreCase))
+            {
+                log.WriteLine($"Using {dir.FullName}: its {SpecTraceConfig.FileName} already configures this folder (--here to set up a separate root).");
+            }
+
+            return dir.FullName;
+        }
+
+        var git = Git.Open(current);
+        if (git != null)
+        {
+            var top = Path.GetFullPath(git.TopLevel);
+            if (!string.Equals(top.TrimEnd(Path.DirectorySeparatorChar), current.TrimEnd(Path.DirectorySeparatorChar), StringComparison.OrdinalIgnoreCase))
+            {
+                log.WriteLine($"Using the repository root {top} (--here to set up {current} instead).");
+            }
+
+            return top;
+        }
+
+        return current;
     }
 
     /// <summary>

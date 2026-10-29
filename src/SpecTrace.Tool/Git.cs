@@ -51,7 +51,13 @@ public sealed class Git
     /// Lines (1-based) that the working tree adds or changes since <paramref name="since"/>, by path relative to the top
     /// level. Includes uncommitted changes and new files not yet added.
     /// </summary>
-    public IReadOnlyDictionary<string, HashSet<int>> AddedLines(string since)
+    public IReadOnlyDictionary<string, HashSet<int>> AddedLines(string since) => ChangedLines(since, includeDeletions: false);
+
+    /// <summary>
+    /// Like <see cref="AddedLines"/>, and also where lines were removed (the lines around each removal), so a change
+    /// that only deletes code still touches the member it was in.
+    /// </summary>
+    public IReadOnlyDictionary<string, HashSet<int>> ChangedLines(string since, bool includeDeletions = true)
     {
         var result = new Dictionary<string, HashSet<int>>(StringComparer.Ordinal);
         string? file = null;
@@ -71,6 +77,11 @@ public sealed class Git
                 var count = h.Groups["count"].Success ? int.Parse(h.Groups["count"].Value) : 1;
                 if (!result.TryGetValue(file, out var set)) result[file] = set = new HashSet<int>();
                 for (var i = 0; i < count; i++) set.Add(start + i);
+                if (count == 0 && includeDeletions)
+                {
+                    set.Add(Math.Max(start, 1));
+                    set.Add(start + 1);
+                }
             }
         }
 

@@ -16,3 +16,6 @@ ST0008 | SpecTrace | Warning | SpecTraceAnalyzer
 ST0009 | SpecTrace | Warning | SpecTraceAnalyzer
 ST0010 | SpecTrace | Warning | SpecTraceAnalyzer
 ST0011 | SpecTrace | Warning | SpecTraceAnalyzer
+ST0012 | SpecTrace | Info | SpecTraceAnalyzer
+ST0013 | SpecTrace | Warning | SpecTraceAnalyzer
+ST0014 | SpecTrace | Info | SpecTraceAnalyzer

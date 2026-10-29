@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Text.Json;
 using SpecTrace.Specs;
+using SpecTrace.Tool.Results;
 
 namespace SpecTrace.Tool;
 
@@ -14,7 +15,7 @@ public static class Reports
     /// Prefix that turns paths into absolute links (e.g. https://github.com/org/repo/blob/&lt;sha&gt;/samples/Orders/),
     /// needed when the report is posted as a pull request comment.
     /// </param>
-    public static string Markdown(TraceModel model, string? linkBase = null)
+    public static string Markdown(TraceModel model, string? linkBase = null, ImpactReport? impact = null)
     {
         string Href(string file, int line) => $"{linkBase}{file}#L{line}";
         string Link(TraceLink l) => linkBase == null
@@ -36,10 +37,27 @@ public static class Reports
         sb.AppendLine($"- Implemented: **{implemented}/{active.Count}**");
         sb.AppendLine($"- With at least one test: **{verified}/{active.Count}**");
         sb.AppendLine($"- Acceptance criteria with tests: **{covered}/{criteria}**");
+        if (model.HasTestResults)
+        {
+            var outcomes = active.SelectMany(t => t.Requirement.Criteria.Select(c => model.OutcomeOf(t, c.Id))).Where(o => o != null).ToList();
+            var failing = outcomes.Count(o => o == TestOutcome.Failed);
+            var notRun = outcomes.Count(o => o == TestOutcome.NotRun);
+            sb.AppendLine($"- Acceptance criteria passing: **{outcomes.Count(o => o == TestOutcome.Passed)}/{criteria}**" +
+                          (failing > 0 ? $" · ❌ {failing} failing" : "") + (notRun > 0 ? $" · ⚪ {notRun} not run" : ""));
+        }
+
         var drifted = model.Requirements.Where(t => t.HasDrift).ToList();
         sb.AppendLine(model.HasLock
             ? $"- Unreviewed spec changes: **{drifted.Count}**"
             : "- No `spectrace.lock`: run `dotnet spectrace lock` to detect spec changes");
+        if (impact != null)
+        {
+            sb.AppendLine();
+            sb.Append(Impact.Markdown(impact, linkBase == null ? null : Href));
+        }
+
+        sb.AppendLine();
+        sb.AppendLine("## All requirements");
         sb.AppendLine();
         sb.AppendLine("| Requirement | Status | Implemented in | Verified by | Criteria |");
         sb.AppendLine("| --- | --- | --- | --- | --- |");
@@ -48,8 +66,8 @@ public static class Reports
         {
             var r = t.Requirement;
             var impl = t.IsImplemented ? string.Join("<br>", t.Implementations.Select(Link)) : r.IsEnforced ? "**missing**" : "–";
-            var tests = t.IsVerified ? string.Join("<br>", t.Verifications.Select(v => Link(v) + (v.Criterion != null ? $" ({v.Criterion})" : ""))) : r.IsEnforced ? "**missing**" : "–";
-            var crit = r.Criteria.Count == 0 ? "–" : $"{t.CoveredCriteria}/{r.Criteria.Count}";
+            var tests = t.IsVerified ? string.Join("<br>", t.Verifications.Select(v => Link(v) + (v.Criterion != null ? $" ({v.Criterion})" : "") + Icon(model.OutcomeOf(v)))) : r.IsEnforced ? "**missing**" : "–";
+            var crit = r.Criteria.Count == 0 ? "–" : $"{t.CoveredCriteria}/{r.Criteria.Count}" + CriteriaOutcome(model, t);
             sb.AppendLine($"| [{r.Id}]({Href(r.FilePath, r.Line + 1)}) {Escape(r.Title)}{SourceSuffix(r)} | {r.Status} | {impl} | {tests} | {crit} |");
         }
 
@@ -65,6 +83,35 @@ public static class Reports
                 if (!t.IsImplemented) sb.AppendLine($"- {r.Id} {r.Title}: not implemented");
                 if (!t.IsVerified) sb.AppendLine($"- {r.Id} {r.Title}: no tests");
                 else foreach (var c in t.UncoveredCriteria) sb.AppendLine($"- {r.Id} {c.Id}: no test ({c.Text})");
+            }
+        }
+
+        if (model.HasTestResults)
+        {
+            var failingCriteria = model.Requirements
+                .SelectMany(t => t.Requirement.Criteria.Where(c => model.OutcomeOf(t, c.Id) == TestOutcome.Failed).Select(c => (t, c)))
+                .ToList();
+            if (failingCriteria.Count > 0)
+            {
+                sb.AppendLine();
+                sb.AppendLine("## Failing criteria");
+                sb.AppendLine();
+                foreach (var (t, c) in failingCriteria)
+                {
+                    var failed = t.Verifications.Where(v => v.Criterion == c.Id && model.OutcomeOf(v) == TestOutcome.Failed).ToList();
+                    var message = failed.Select(v => model.TestResults!.Find(v.Symbol, v.Namespace)?.Message).FirstOrDefault(m => m != null);
+                    sb.AppendLine($"- [{t.Requirement.Id} {c.Id}]({Href(t.Requirement.FilePath, c.Line + 1)}) \"{Escape(c.Text)}\": " +
+                                  string.Join(", ", failed.Select(Link)) + " failed" + (message != null ? $" — {Escape(FirstLine(message))}" : ""));
+                }
+            }
+
+            var notRunCriteria = model.Requirements.Where(t => t.Requirement.IsEnforced)
+                .SelectMany(t => t.Requirement.Criteria.Where(c => model.OutcomeOf(t, c.Id) == TestOutcome.NotRun).Select(c => $"{t.Requirement.Id} {c.Id}"))
+                .ToList();
+            if (notRunCriteria.Count > 0)
+            {
+                sb.AppendLine();
+                sb.AppendLine($"Tests that did not run (skipped or not in the results): {string.Join(", ", notRunCriteria)}.");
             }
         }
 
@@ -106,6 +153,18 @@ public static class Reports
             sb.AppendLine("## References to requirements that do not exist");
             sb.AppendLine();
             foreach (var l in model.UnknownLinks) sb.AppendLine($"- `{l.RequirementId}` in {Link(l)}");
+        }
+
+        var quality = SpecLint.Check(model.Catalog.Requirements);
+        if (quality.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine("## Spec quality");
+            sb.AppendLine();
+            sb.AppendLine("Things that make a requirement hard to implement or to test as written (ST0012–ST0014):");
+            sb.AppendLine();
+            foreach (var q in quality.Take(30)) sb.AppendLine($"- [{q.RequirementId}{(q.CriterionId != null ? " " + q.CriterionId : "")}]({Href(q.FilePath, q.Line + 1)}) {Escape(q.Message)}");
+            if (quality.Count > 30) sb.AppendLine($"- … and {quality.Count - 30} more (`dotnet spectrace report --format json`).");
         }
 
         if (model.Catalog.Issues.Count > 0)
@@ -180,6 +239,28 @@ public static class Reports
             Emit("error", l.File, l.Line, "ST0001", "Unknown requirement", $"'{l.RequirementId}' does not exist in any spec");
         }
 
+        // Failing tests, on the criterion they verify: the PR shows which behaviour broke, not only which test.
+        foreach (var t in model.Requirements)
+        {
+            foreach (var c in t.Requirement.Criteria.Where(c => model.OutcomeOf(t, c.Id) == TestOutcome.Failed))
+            {
+                var failed = t.Verifications.Where(v => v.Criterion == c.Id && model.OutcomeOf(v) == TestOutcome.Failed).Select(v => v.Symbol).Distinct();
+                Emit("error", t.Requirement.FilePath, c.Line + 1, "Tests", "Criterion failing",
+                    $"{t.Requirement.Id} {c.Id} \"{c.Text}\": {string.Join(", ", failed)} failed");
+            }
+        }
+
+        foreach (var q in SpecLint.Check(model.Catalog.Requirements))
+        {
+            var (code, title, level) = q.Kind switch
+            {
+                SpecQualityKind.NotEars => ("ST0012", "Statement is not a requirement", "notice"),
+                SpecQualityKind.VagueTerm => ("ST0013", "Vague term", "warning"),
+                _ => ("ST0014", "Criterion without an outcome", "notice"),
+            };
+            Emit(level, q.FilePath, q.Line + 1, code, title, q.Message);
+        }
+
         foreach (var i in model.Catalog.Issues)
         {
             var dup = i.Kind is SpecIssueKind.DuplicateRequirement or SpecIssueKind.DuplicateCriterion;
@@ -195,12 +276,20 @@ public static class Reports
 
     private static string Property(string s) => Data(s).Replace(":", "%3A").Replace(",", "%2C");
 
-    public static string Json(TraceModel model)
+    public static string Json(TraceModel model, ImpactReport? impact = null)
     {
         var payload = new
         {
             generatedAt = DateTimeOffset.Now,
+            impact = impact == null ? null : Impact.Json(impact),
             hasLock = model.HasLock,
+            testResults = model.TestResults == null ? null : new
+            {
+                files = model.TestResults.Files,
+                passing = model.Requirements.Where(t => t.Requirement.IsEnforced).Sum(t => t.Requirement.Criteria.Count(c => model.OutcomeOf(t, c.Id) == TestOutcome.Passed)),
+                failing = model.Requirements.Sum(t => t.Requirement.Criteria.Count(c => model.OutcomeOf(t, c.Id) == TestOutcome.Failed)),
+                notRun = model.Requirements.Where(t => t.Requirement.IsEnforced).Sum(t => t.Requirement.Criteria.Count(c => model.OutcomeOf(t, c.Id) == TestOutcome.NotRun)),
+            },
             requirements = model.Requirements.Select(t => new
             {
                 id = t.Requirement.Id,
@@ -210,12 +299,13 @@ public static class Reports
                 statement = t.Requirement.Statement,
                 spec = $"{t.Requirement.FilePath}:{t.Requirement.Line + 1}",
                 implementedBy = t.Implementations.Select(l => new { symbol = l.Symbol, location = $"{l.File}:{l.Line}" }),
-                verifiedBy = t.Verifications.Select(l => new { symbol = l.Symbol, criterion = l.Criterion, location = $"{l.File}:{l.Line}" }),
+                verifiedBy = t.Verifications.Select(l => new { symbol = l.Symbol, criterion = l.Criterion, location = $"{l.File}:{l.Line}", outcome = Name(model.OutcomeOf(l)) }),
                 criteria = t.Requirement.Criteria.Select(c => new
                 {
                     id = c.Id,
                     text = c.Text,
                     verified = t.Verifications.Any(v => v.Criterion == c.Id),
+                    result = Name(model.OutcomeOf(t, c.Id)),
                 }),
                 gap = t.HasGap,
                 drift = new
@@ -228,6 +318,16 @@ public static class Reports
             }),
             unknownReferences = model.UnknownLinks.Select(l => new { id = l.RequirementId, location = $"{l.File}:{l.Line}" }),
             specIssues = model.Catalog.Issues.Select(i => new { file = i.FilePath, line = i.Line + 1, kind = i.Kind.ToString(), message = i.Message }),
+            specQuality = SpecLint.Check(model.Catalog.Requirements).Select(q => new
+            {
+                id = q.RequirementId,
+                criterion = q.CriterionId,
+                kind = q.Kind.ToString(),
+                term = q.Term.Length > 0 ? q.Term : null,
+                file = q.FilePath,
+                line = q.Line + 1,
+                message = q.Message,
+            }),
         };
         return JsonSerializer.Serialize(payload, new JsonSerializerOptions
         {
@@ -292,6 +392,16 @@ public static class Reports
         }
 
         sb.AppendLine();
+        var quality = SpecLint.Check(r);
+        if (quality.Count > 0)
+        {
+            sb.AppendLine("## Spec quality");
+            sb.AppendLine();
+            foreach (var q in quality) sb.AppendLine($"- {q.Message}");
+            sb.AppendLine("- If the meaning is not clear from the code and the other requirements, ask a person instead of choosing one.");
+            sb.AppendLine();
+        }
+
         sb.AppendLine("## Current implementation");
         sb.AppendLine();
         if (t.IsImplemented) foreach (var l in t.Implementations) sb.AppendLine($"- {Link(l)}");
@@ -373,6 +483,39 @@ public static class Reports
     }
 
     private static string Link(TraceLink l) => $"`{l.Symbol}` ({l.File}:{l.Line})";
+
+    private static string Icon(TestOutcome? outcome) => outcome switch
+    {
+        TestOutcome.Passed => " ✅",
+        TestOutcome.Failed => " ❌",
+        TestOutcome.NotRun => " ⚪",
+        _ => "",
+    };
+
+    /// <summary>" ✅" when every tested criterion passes, " · ❌ 2" / " · ⚪ 1" otherwise; empty without results.</summary>
+    private static string CriteriaOutcome(TraceModel model, RequirementTrace t)
+    {
+        if (!model.HasTestResults) return "";
+        var outcomes = t.Requirement.Criteria.Select(c => model.OutcomeOf(t, c.Id)).Where(o => o != null).ToList();
+        if (outcomes.Count == 0) return "";
+        var failing = outcomes.Count(o => o == TestOutcome.Failed);
+        var notRun = outcomes.Count(o => o == TestOutcome.NotRun);
+        return failing > 0 ? $" · ❌ {failing}" : notRun > 0 ? $" · ⚪ {notRun}" : " ✅";
+    }
+
+    private static string? Name(TestOutcome? outcome) => outcome switch
+    {
+        TestOutcome.Passed => "passed",
+        TestOutcome.Failed => "failed",
+        TestOutcome.NotRun => "notRun",
+        _ => null,
+    };
+
+    private static string FirstLine(string text)
+    {
+        var line = text.Replace("\r\n", "\n").Split('\n')[0].Trim();
+        return line.Length > 160 ? line.Substring(0, 157) + "..." : line;
+    }
 
     /// <summary>" · [#3](url)" after the title when the requirement has a Source: line.</summary>
     private static string SourceSuffix(SpecRequirement r)

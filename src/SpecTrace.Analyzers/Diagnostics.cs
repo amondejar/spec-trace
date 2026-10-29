@@ -87,6 +87,21 @@ namespace SpecTrace.Analyzers
             "Criterion {1} of '{0}' changed after the last review (spectrace.lock). Review {2} and, once it is up to date, run: dotnet spectrace lock --requirement {0}",
             DiagnosticSeverity.Warning, compilationEnd: true);
 
+        public static readonly DiagnosticDescriptor NotEars = Rule("ST0012",
+            "Statement is not a requirement",
+            "{0}",
+            DiagnosticSeverity.Info, compilationEnd: true);
+
+        public static readonly DiagnosticDescriptor VagueTerm = Rule("ST0013",
+            "Vague term in a requirement",
+            "{0}",
+            DiagnosticSeverity.Warning, compilationEnd: true);
+
+        public static readonly DiagnosticDescriptor NoOutcome = Rule("ST0014",
+            "Acceptance criterion without an outcome",
+            "{0}",
+            DiagnosticSeverity.Info, compilationEnd: true);
+
         public static readonly DiagnosticDescriptor NotConstant = Rule("ST0009",
             "Requirement ID is not a constant",
             "The requirement ID must be a constant (use Requirements.XXX or a string literal)",

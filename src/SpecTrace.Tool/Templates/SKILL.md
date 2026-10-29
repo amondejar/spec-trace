@@ -31,6 +31,12 @@ checks it (diagnostics `ST0001`–`ST0011`).
    dotnet spectrace context <ID>
    ```
 
+## Before approving a spec
+
+If you are asked to review a requirement, use the `review_spec` MCP prompt or follow it: contradictions between the
+statement and the criteria, vague terms (ST0013), missing cases, conflicts with other requirements. Report; do not
+edit the spec unless asked.
+
 ## Starting from a user story
 
 If the task is a user story or an issue (#12, a GitHub issue URL) rather than a requirement, turn it into a spec first
@@ -89,3 +95,4 @@ code and tests. Show the person the `git diff`.
 | ST0006 | Deprecated requirement referenced | Remove the reference |
 | ST0010 | The statement changed after the last review | Review the implementation and tell a person |
 | ST0011 | A criterion changed after the last review | Review its tests and tell a person |
+| ST0012–ST0014 | The requirement is hard to test as written | Ask a person what it means; do not choose for them |

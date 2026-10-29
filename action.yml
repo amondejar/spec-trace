@@ -18,6 +18,14 @@ inputs:
   fail-on-drift:
     description: If 'true', the job fails when a requirement's text changed after review (spectrace.lock) and its code or tests have not been reviewed.
     default: "false"
+  test-results:
+    description: >
+      .trx files or folders with test results (dotnet test --logger trx), separated by spaces. The report then shows
+      whether each acceptance criterion's tests pass, and failing criteria are annotated on the spec. Empty: not shown.
+    default: ""
+  impact:
+    description: If 'true' and the event is a pull request, the report starts with the requirements the pull request touches.
+    default: "true"
   comment:
     description: If 'true' and the event is a pull request, posts or updates a comment with the report.
     default: "true"
@@ -41,6 +49,9 @@ outputs:
   drift:
     description: Number of requirements whose text changed after the last review and have code or tests to review.
     value: ${{ steps.report.outputs.drift }}
+  failing:
+    description: Number of acceptance criteria with a failing test (needs test-results).
+    value: ${{ steps.report.outputs.failing }}
 
 runs:
   using: composite
@@ -67,22 +78,39 @@ runs:
       env:
         ROOT: ${{ inputs.root }}
         LINK_BASE: ${{ github.server_url }}/${{ github.repository }}/blob/${{ github.event.pull_request.head.sha || github.sha }}/
+        TEST_RESULTS: ${{ inputs.test-results }}
+        IMPACT: ${{ inputs.impact }}
+        BASE_REF: ${{ github.base_ref }}
       run: |
         root="${ROOT%/}"
         if [ "$root" = "." ]; then prefix=""; else prefix="$root/"; fi
 
+        results=()
+        for path in $TEST_RESULTS; do results+=(--test-results "$path"); done
+
+        # Pull requests: compare with the base branch to list the requirements they touch.
+        impact=()
+        if [ "$IMPACT" = "true" ] && [ -n "$BASE_REF" ]; then
+          git fetch --no-tags --depth=1 origin "+refs/heads/$BASE_REF:refs/remotes/origin/$BASE_REF" || true
+          if git rev-parse --verify --quiet "origin/$BASE_REF" > /dev/null; then impact=(--base "origin/$BASE_REF"); fi
+        fi
+
         # Annotations on the PR files.
-        spectrace report --root "$root" --format github
+        spectrace report --root "$root" --format github "${results[@]}"
 
         # Markdown report with absolute links, for the job summary and the comment.
-        spectrace report --root "$root" --link-base "${LINK_BASE}${prefix}" --out "$RUNNER_TEMP/spectrace-report.md" > /dev/null
+        spectrace report --root "$root" --link-base "${LINK_BASE}${prefix}" --out "$RUNNER_TEMP/spectrace-report.md" "${results[@]}" "${impact[@]}" > /dev/null
         cat "$RUNNER_TEMP/spectrace-report.md" >> "$GITHUB_STEP_SUMMARY"
 
-        gaps=$(spectrace report --root "$root" --format json | jq '[.requirements[] | select(.gap)] | length')
+        json=$(spectrace report --root "$root" --format json "${results[@]}")
+        failing=$(echo "$json" | jq '.testResults.failing // 0')
+        echo "failing=$failing" >> "$GITHUB_OUTPUT"
+
+        gaps=$(echo "$json" | jq '[.requirements[] | select(.gap)] | length')
         echo "gaps=$gaps" >> "$GITHUB_OUTPUT"
         echo "Requirements with gaps: $gaps"
 
-        drift=$(spectrace report --root "$root" --format json | jq '[.requirements[] | select(.drift.pending)] | length')
+        drift=$(echo "$json" | jq '[.requirements[] | select(.drift.pending)] | length')
         echo "drift=$drift" >> "$GITHUB_OUTPUT"
         echo "Requirements with unreviewed spec changes: $drift"
 
