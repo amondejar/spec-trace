@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.8.0-preview.1
+
+### Added
+
+- **From approved spec to pull request.** `dotnet spectrace init --agent` adds a GitHub Actions workflow
+  (`.github/workflows/spectrace-implement.yml`): when a push to the default branch approves a requirement, it starts
+  one run per requirement in which the Claude Code GitHub Action, with the SpecTrace MCP server and the
+  `implement_requirement` prompt, implements it, writes one test per criterion, pushes `spectrace/implement-<ID>` and
+  opens a pull request for a person to review; with an unclear spec it opens an issue with its questions instead. It
+  can also be started by hand with a requirement ID. Authentication with `CLAUDE_CODE_OAUTH_TOKEN` (Claude
+  subscription) or `ANTHROPIC_API_KEY`, as repository secrets; `dotnet spectrace lock` is denied to the agent.
+- `dotnet spectrace pending`: the work queue, approved requirements still missing their implementation or tests and
+  what is missing (`--since <ref>` for only those whose spec changed since then, `--requirement`, `--format md|json|ids`).
+- `dotnet spectrace prompt <name> <argument>`: prints an MCP prompt as text for agents that run without MCP prompts;
+  without a name it lists them.
+
 ## 0.7.1-preview.1
 
 ### Added

@@ -59,7 +59,7 @@ the closest valid one suggested.
 | --- | --- |
 | `SpecTrace` | Roslyn analyzer + source generator, IDE code fixes and MSBuild props/targets. Brings in `SpecTrace.Abstractions`. |
 | `SpecTrace.Abstractions` | The `[Implements]` and `[Verifies]` attributes. |
-| `SpecTrace.Tool` | The `dotnet spectrace` CLI: `report`, `context`, `lock`, `scaffold-tests`, `import`, `mcp`, `init`. |
+| `SpecTrace.Tool` | The `dotnet spectrace` CLI: `report`, `pending`, `impact`, `context`, `prompt`, `lock`, `ids`, `scaffold-tests`, `story`, `stories`, `import`, `mcp`, `init`. |
 
 ## Getting started
 
@@ -182,7 +182,7 @@ jobs:
         with:
           dotnet-version: 8.0.x
       - run: dotnet test --logger trx --results-directory TestResults
-      - uses: amondejar/spec-trace@v0.7.1
+      - uses: amondejar/spec-trace@v0.8.0
         if: always()                 # also when tests fail: the report says which criteria broke
         with:
           root: .                    # folder containing spectrace.json
@@ -325,6 +325,42 @@ that prefer revision 2026-07-28 fall back to it automatically.
     "spectrace": { "type": "stdio", "command": "dotnet", "args": ["spectrace", "mcp"] }
   }
 }
+```
+
+### From approved spec to pull request (GitHub Actions)
+
+`dotnet spectrace init --agent` adds `.github/workflows/spectrace-implement.yml`, which closes the loop: people write
+and approve specs and review pull requests, and an agent does the work in between.
+
+```text
+spec PR approved and merged ──▶ queue job: dotnet spectrace pending --since <commit before the push>
+                                   │ one run per approved requirement that still lacks code or tests
+                                   ▼
+                                implement job: Claude Code GitHub Action + SpecTrace MCP server
+                                   │ implement_requirement prompt, dotnet build / dotnet test until clean
+                                   ▼
+                                branch spectrace/implement-<ID> + pull request ──▶ your CI ──▶ a person reviews,
+                                (or an issue with questions if the spec is unclear)          runs spectrace lock, merges
+```
+
+- **Triggers:** a push to the default branch that touches the specs (only the requirements that push approved or
+  extended, so old gaps do not start runs), or by hand from Actions → SpecTrace implement → Run workflow with an ID.
+- **Authentication:** the secret `CLAUDE_CODE_OAUTH_TOKEN` (`claude setup-token`, Claude Pro or Max) or
+  `ANTHROPIC_API_KEY` (Claude Console; swap the two lines marked `auth`). Never commit a token to the repository.
+- **Claude GitHub App:** install it on the repository (<https://github.com/apps/claude>). The agent pushes with its
+  token, so your CI runs on the pull request; GitHub does not start workflows for pushes made with `GITHUB_TOKEN`.
+- **Guardrails:** the agent gets the SpecTrace tools, file edits, `dotnet build`/`test`, `git add`/`commit`, a push of
+  its own branch only, `gh pr create` and `gh issue create`; `dotnet spectrace lock` is denied, so recording the
+  review stays with a person. One branch per requirement (an existing branch is never overwritten), 80 turns and a
+  60-minute timeout. If the spec is ambiguous it opens an issue with its questions instead of guessing.
+- Protect the default branch so that only reviewed pull requests reach it.
+
+The two commands it relies on work anywhere:
+
+```bash
+dotnet spectrace pending                       # approved requirements missing code or tests, and what is missing
+dotnet spectrace pending --since HEAD~1 --format ids   # only what the last commit approved, one ID per line
+dotnet spectrace prompt implement_requirement BK-008   # the MCP prompt as text, for agents without MCP prompts
 ```
 
 ### Microsoft Agent Framework demo

@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using SpecTrace.Tool;
+using SpecTrace.Tool.Automation;
 using SpecTrace.Tool.Stories;
 
 return Cli.Run(args);
@@ -47,6 +48,14 @@ internal static class Cli
                           implementation and tests on changed lines, removed requirements, untraced code.
                             --base <ref>       default origin/main, origin/master, main or master
                             --format md|json
+          pending         The work queue: approved requirements still missing their implementation or tests.
+                            --since <ref>      only those whose spec changed since that commit (what a merge approved)
+                            --requirement <ID> only that requirement (repeatable)
+                            --format md|json|ids
+                                               ids = one ID per line, for scripts
+          prompt <name> <argument>
+                          Prints an MCP prompt (implement_requirement, review_spec, strengthen_tests, story_to_spec) for
+                          an agent that runs without MCP prompts, such as a CI job. Without a name it lists them.
           context <ID>    Requirement context for an agent: statement, criteria, status and how to mark the work.
           scaffold-tests  xUnit skeletons for criteria without tests.
                             --project <dir>    folder of the test project (required)
@@ -77,6 +86,8 @@ internal static class Cli
                           spectrace.json above, or the root of the git repository.
                             --skills-dir <dir> skills folder (default .claude/skills)
                             --here             set up the current folder even inside another root
+                            --agent            also the GitHub Actions workflow in which an agent implements each
+                                               approved requirement and opens a pull request for review
 
         Common options:
           --root <dir>      folder to search spectrace.json from (default: the current one)
@@ -141,6 +152,42 @@ internal static class Cli
                     Console.WriteLine(opts.Get("format") == "json"
                         ? System.Text.Json.JsonSerializer.Serialize(Impact.Json(impact), JsonOptions)
                         : Impact.Markdown(impact));
+                    return 0;
+                }
+
+                case "pending":
+                {
+                    var model = TraceScanner.Scan(config);
+                    var since = opts.Get("since");
+                    if (opts.Has("since") && since == null) throw new ArgumentException("--since needs a commit or branch.");
+                    var work = SpecTrace.Tool.Automation.WorkQueue.Compute(config, model, since, opts.GetAll("requirement"));
+                    var text = opts.Get("format") switch
+                    {
+                        "json" => System.Text.Json.JsonSerializer.Serialize(SpecTrace.Tool.Automation.WorkQueue.Json(work), JsonOptions),
+                        "ids" => SpecTrace.Tool.Automation.WorkQueue.Ids(work),
+                        "md" or null => SpecTrace.Tool.Automation.WorkQueue.Markdown(work, since),
+                        var other => throw new ArgumentException($"Unknown format '{other}'. Use md, json or ids."),
+                    };
+                    // An empty queue in the ids format is empty output, so scripts can test it with [ -s file ].
+                    if (text.Length > 0) Console.WriteLine(text);
+                    return 0;
+                }
+
+                case "prompt":
+                {
+                    var name = opts.Positional.ElementAtOrDefault(0);
+                    if (name == null)
+                    {
+                        foreach (var p in SpecTrace.Tool.Mcp.SpecTracePrompts.Catalog)
+                        {
+                            Console.WriteLine($"{p.Name} <{p.Argument}>\n    {p.Description}");
+                        }
+
+                        return 0;
+                    }
+
+                    var argument = string.Join(" ", opts.Positional.Skip(1));
+                    Console.WriteLine(SpecTrace.Tool.Mcp.SpecTracePrompts.Text(name, argument));
                     return 0;
                 }
 
@@ -215,12 +262,14 @@ internal static class Cli
         ["ids"] = new[] { "fix", "base" },
         ["impact"] = new[] { "base", "format" },
         ["context"] = Array.Empty<string>(),
+        ["pending"] = new[] { "since", "requirement", "format" },
+        ["prompt"] = Array.Empty<string>(),
         ["scaffold-tests"] = new[] { "project", "requirement", "namespace" },
         ["story"] = new[] { "format" },
         ["stories"] = new[] { "label", "state", "unspecified", "fail-on-unspecified", "format" },
         ["mcp"] = Array.Empty<string>(),
         ["import"] = new[] { "prefix", "out", "status", "dry-run" },
-        ["init"] = new[] { "skills-dir", "here" },
+        ["init"] = new[] { "skills-dir", "here", "agent" },
     };
 
     /// <summary>
@@ -363,8 +412,20 @@ internal static class Cli
             created.Add(existing == null ? ".gitattributes" : ".gitattributes (spectrace.lock merge=union)");
         }
 
+        if (opts.Has("agent"))
+        {
+            var workflow = Path.Combine(".github", "workflows", AgentWorkflow.FileName);
+            Create(workflow, AgentWorkflow.Render(Template(AgentWorkflow.FileName), SpecTraceConfig.Load(root).Specs, AgentWorkflow.DefaultBranch(root),
+                Git.Open(root)?.Prefix ?? ""));
+        }
+
         Console.WriteLine(created.Count == 0 ? "Everything already exists." : "Created:\n" + string.Join("\n", created.Select(c => "  " + c)));
         Console.WriteLine("\nNext step: add the package to your projects with  dotnet add package SpecTrace --prerelease");
+        if (opts.Has("agent"))
+        {
+            foreach (var line in AgentWorkflow.Checklist(root)) Console.WriteLine(line);
+        }
+
         return 0;
     }
 

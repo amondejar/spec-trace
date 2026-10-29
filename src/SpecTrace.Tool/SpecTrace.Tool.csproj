@@ -18,6 +18,7 @@
 
   <ItemGroup>
     <EmbeddedResource Include="Templates\*.md" />
+    <EmbeddedResource Include="Templates\*.yml" />
   </ItemGroup>
 
   <ItemGroup>

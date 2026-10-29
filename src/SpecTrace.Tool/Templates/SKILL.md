@@ -86,7 +86,8 @@ code and tests. Show the person the `git diff`.
 
 1. `dotnet build`: no `ST0001`, `ST0002`, `ST0003`, `ST0004` or `ST0005` may remain for the requirement.
 2. `dotnet test`: all the requirement's tests pass.
-3. `dotnet spectrace report` (or `list_requirements` with `only_gaps: true`): the requirement no longer shows as a gap.
+3. `dotnet spectrace pending --requirement <ID>` no longer lists it (nor does `list_requirements` with `only_gaps: true`):
+   the requirement has its implementation and a test per criterion.
 4. In the change summary, list the requirements and criteria covered, by ID.
 
 ## Diagnostics quick reference

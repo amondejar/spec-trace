@@ -35,6 +35,21 @@ public sealed class Git
     /// <summary>The branch others merge into: the first of origin/main, origin/master, main, master that exists.</summary>
     public string? DefaultBase() => new[] { "origin/main", "origin/master", "main", "master" }.FirstOrDefault(RefExists);
 
+    /// <summary>The default branch of origin as git knows it ("main"), or null if origin/HEAD is not set.</summary>
+    public string? RemoteDefaultBranch()
+    {
+        var (code, output) = TryRun("symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD");
+        var name = output.Trim();
+        return code == 0 && name.StartsWith("origin/", StringComparison.Ordinal) ? name.Substring("origin/".Length) : null;
+    }
+
+    /// <summary>The checked-out branch (also before its first commit), or null with a detached HEAD.</summary>
+    public string? CurrentBranch()
+    {
+        var (code, output) = TryRun("symbolic-ref", "--quiet", "--short", "HEAD");
+        return code == 0 && output.Trim().Length > 0 ? output.Trim() : null;
+    }
+
     public string MergeBase(string a, string b) => Run("merge-base", a, b).Trim();
 
     /// <summary>Files under <paramref name="directory"/> (relative to the top level) at <paramref name="reference"/>.</summary>

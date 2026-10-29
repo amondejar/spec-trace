@@ -48,6 +48,22 @@ public static class SpecTracePrompts
 
     public static bool Exists(string name) => All.Any(p => p.Name == name);
 
+    /// <summary>Name, argument and description of each prompt, for <c>dotnet spectrace prompt</c> without arguments.</summary>
+    public static IEnumerable<(string Name, string Argument, string Description)> Catalog =>
+        All.Select(p => (p.Name, p.Argument, p.Description));
+
+    /// <summary>
+    /// The text of a prompt, the same one MCP clients get: <c>dotnet spectrace prompt</c> prints it so a CI job can
+    /// hand it to an agent that runs without a person (for example the Claude Code GitHub Action).
+    /// </summary>
+    public static string Text(string name, string argument)
+    {
+        var prompt = All.FirstOrDefault(p => p.Name == name)
+            ?? throw new ArgumentException($"Unknown prompt '{name}'. Prompts: {string.Join(", ", All.Select(p => p.Name))}.");
+        if (string.IsNullOrWhiteSpace(argument)) throw new ArgumentException($"Missing argument '{prompt.Argument}'.");
+        return prompt.Text(argument.Trim());
+    }
+
     /// <summary>The prompt's messages, or an <see cref="ArgumentException"/> if the argument is missing.</summary>
     public static JsonObject Get(string name, JsonObject? arguments)
     {
