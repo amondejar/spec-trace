@@ -131,7 +131,7 @@ public sealed class SpecTraceTools
         var status = OptionalString(args, "status");
         var onlyGaps = args["only_gaps"]?.GetValue<bool>() ?? false;
         var onlyChanged = args["only_changed"]?.GetValue<bool>() ?? false;
-        var model = TraceScanner.Scan(_config);
+        var model = TraceScanner.Scan(_config) with { Mutations = Results.MutationAnalysis.Discover(_config) };
 
         var items = model.Requirements
             .Where(t => status == null || string.Equals(t.Requirement.Status, status, StringComparison.OrdinalIgnoreCase))
@@ -148,6 +148,7 @@ public sealed class SpecTraceTools
                 ["criteria_total"] = t.Requirement.Criteria.Count,
                 ["gap"] = t.HasGap,
                 ["spec_changed"] = t.HasDrift,
+                ["mutation_score"] = model.MutationOf(t)?.Score is { } score ? JsonValue.Create(score) : null,
                 ["spec"] = $"{t.Requirement.FilePath}:{t.Requirement.Line + 1}",
             })
             .ToArray();
@@ -170,7 +171,8 @@ public sealed class SpecTraceTools
     private JsonObject GetRequirement(JsonObject args)
     {
         var id = RequiredString(args, "id");
-        return Text(Reports.Context(TraceScanner.Scan(_config), id));
+        // The newest Stryker report of the repository, if there is one: which changes the tests do not detect.
+        return Text(Reports.Context(TraceScanner.Scan(_config) with { Mutations = Results.MutationAnalysis.Discover(_config) }, id));
     }
 
     private const int MaxFiles = 8;

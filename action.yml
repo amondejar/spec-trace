@@ -23,6 +23,11 @@ inputs:
       .trx files or folders with test results (dotnet test --logger trx), separated by spaces. The report then shows
       whether each acceptance criterion's tests pass, and failing criteria are annotated on the spec. Empty: not shown.
     default: ""
+  mutation-report:
+    description: >
+      Stryker mutation-report.json (dotnet stryker --reporter json), or a folder: the newest report in it. The report then
+      shows, per requirement, how many changes to its code the tests detect, and annotates the ones they do not.
+    default: ""
   impact:
     description: If 'true' and the event is a pull request, the report starts with the requirements the pull request touches.
     default: "true"
@@ -79,6 +84,7 @@ runs:
         ROOT: ${{ inputs.root }}
         LINK_BASE: ${{ github.server_url }}/${{ github.repository }}/blob/${{ github.event.pull_request.head.sha || github.sha }}/
         TEST_RESULTS: ${{ inputs.test-results }}
+        MUTATION_REPORT: ${{ inputs.mutation-report }}
         IMPACT: ${{ inputs.impact }}
         BASE_REF: ${{ github.base_ref }}
       run: |
@@ -87,6 +93,7 @@ runs:
 
         results=()
         for path in $TEST_RESULTS; do results+=(--test-results "$path"); done
+        if [ -n "$MUTATION_REPORT" ]; then results+=(--mutation "$MUTATION_REPORT"); fi
 
         # Pull requests: compare with the base branch to list the requirements they touch.
         impact=()

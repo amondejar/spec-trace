@@ -179,11 +179,12 @@ jobs:
         with:
           dotnet-version: 8.0.x
       - run: dotnet test --logger trx --results-directory TestResults
-      - uses: amondejar/spec-trace@v0.6.0
+      - uses: amondejar/spec-trace@v0.7.0
         if: always()                 # also when tests fail: the report says which criteria broke
         with:
           root: .                    # folder containing spectrace.json
           test-results: TestResults  # .trx files: whether each criterion's tests pass
+          # mutation-report: tests/MyApp.Tests/StrykerOutput   # optional: Stryker report, per requirement
           fail-on-gaps: false        # true to block the PR when there are gaps
           fail-on-drift: true        # block when the spec changed and nobody reviewed code and tests
 ```
@@ -198,7 +199,8 @@ On every pull request the Action:
 - annotates gaps and spec quality issues on the PR files, adds the report to the job summary and keeps one comment
   with it, updated on every push.
 
-Outputs: `gaps`, `drift` and `failing` (criteria with a failing test). For other CI systems:
+With `mutation-report`, it also shows per requirement how many changes to its code the tests detect, and annotates
+the ones they do not. Outputs: `gaps`, `drift` and `failing` (criteria with a failing test). For other CI systems:
 `dotnet spectrace report --test-results TestResults --base origin/main --fail-on-gaps --fail-on-failing`, in Markdown
 or `--format json`.
 
@@ -219,6 +221,34 @@ Compared with `origin/main`: 2 requirement(s) touched.
 A requirement is touched when its spec text changed against the base (statement, a criterion, its status) or when the
 change edits lines of a member with `[Implements]` or a test with `[Verifies]` for it. Reviewers see the change as
 behaviour, and the product owner knows what to check again. Changed code that no requirement covers is listed too.
+
+### Mutation testing per requirement
+
+A test with `[Verifies]` that passes may still check nothing. Mutation testing changes the code on purpose (`<` into
+`<=`, a condition into `true`, a call removed) and looks for a test that fails. SpecTrace reads the report of
+[Stryker.NET](https://stryker-mutator.io) and tells, per requirement, how many of the
+changes to its code (the members with `[Implements]`) the tests detect, which ones survive, and which criteria's tests
+detect none of them:
+
+```bash
+dotnet tool install dotnet-stryker                   # once, as a local tool
+cd tests/MyApp.Tests && dotnet stryker --reporter json
+cd ../.. && dotnet spectrace report --mutation tests/MyApp.Tests/StrykerOutput
+```
+
+```text
+| BK-002 Prevent double booking | ... | 4/4 | 60% (6/10) ⚠️ |
+
+**BK-002 Prevent double booking**: 60% (6/10)
+- src/RoomBooking.Api/Domain/BookingService.cs:199 EqualityOperator: `<=` (survived)
+- The tests of AC-4 detect none of the changes in this code.
+```
+
+Each surviving mutant is a test that should exist: the PR gets a warning on that line of code. `--min-mutation-score
+<n>` fails when a requirement is below n %. The MCP tool `get_requirement` finds the newest report in a
+`StrykerOutput` folder by itself, and the `strengthen_tests` prompt asks an agent to write the tests that catch the
+surviving mutants, without touching the production code and without inventing rules for behaviour no criterion
+describes. Stryker is slow on big code bases: run it nightly or before a release rather than on every push.
 
 ### Test results
 
@@ -258,6 +288,7 @@ It also offers MCP prompts, which Claude Code shows as slash commands:
 | --- | --- | --- |
 | `story_to_spec` | `story` | Turn a user story into proposed requirements: EARS statement, testable criteria, open questions, no invented rules |
 | `review_spec` | `target` | Review a requirement or a spec file before approving it: contradictions, ambiguity, missing cases, conflicts |
+| `strengthen_tests` | `id` | Write the tests that catch the changes to a requirement's code no test detects (Stryker's surviving mutants) |
 | `implement_requirement` | `id` | Implement a requirement with one test per criterion and stop when the build is clean |
 
 Paths are confined to the repository and the spec folder; `get_code` never reads `bin`, `obj`, `.git`, configuration

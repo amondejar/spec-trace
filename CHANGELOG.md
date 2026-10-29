@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.7.0-preview.1
+
+### Added
+
+- **Mutation testing per requirement.** `report --mutation <file or folder>` reads Stryker's `mutation-report.json`
+  (Stryker.NET: `dotnet stryker --reporter json`; the common mutation testing report schema, relative or absolute file
+  paths) and maps each mutant to the requirement whose `[Implements]` member contains it:
+  - "Mutants detected" per requirement in the matrix and an overall line in the summary (killed and timed-out mutants
+    are detected; survived and not covered are not; compile and runtime errors, ignored and pending do not count);
+  - "Changes the tests do not detect": surviving mutants with their location, mutator and replacement;
+  - criteria whose tests detect none of the requirement's mutants, when the report says which tests killed what;
+  - PR warnings on the line of each surviving mutant, `mutation` in the JSON report, `--min-mutation-score <n>`.
+- `get_requirement` finds the newest report in a `StrykerOutput` folder by itself and lists the changes the tests do
+  not detect; `list_requirements` returns `mutation_score`.
+- MCP prompt `strengthen_tests`: write the tests that catch the surviving mutants of a requirement.
+- GitHub Action input `mutation-report`.
+
 ## 0.6.0-preview.1
 
 ### Added

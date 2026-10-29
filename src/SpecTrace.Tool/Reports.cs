@@ -46,6 +46,15 @@ public static class Reports
                           (failing > 0 ? $" · ❌ {failing} failing" : "") + (notRun > 0 ? $" · ⚪ {notRun} not run" : ""));
         }
 
+        if (model.Mutations != null)
+        {
+            var mutants = active.SelectMany(t => model.MutationOf(t)!.Mutants).GroupBy(m => (m.File, m.Id, m.StartLine)).Select(g => g.First()).ToList();
+            var detected = mutants.Count(m => m.Detected);
+            sb.AppendLine(mutants.Count == 0
+                ? "- Mutants detected by the tests: no mutant falls in the code of the requirements"
+                : $"- Mutants detected by the tests: **{Math.Floor(100.0 * detected / mutants.Count)}%** ({detected}/{mutants.Count}) in the code of the requirements");
+        }
+
         var drifted = model.Requirements.Where(t => t.HasDrift).ToList();
         sb.AppendLine(model.HasLock
             ? $"- Unreviewed spec changes: **{drifted.Count}**"
@@ -59,8 +68,9 @@ public static class Reports
         sb.AppendLine();
         sb.AppendLine("## All requirements");
         sb.AppendLine();
-        sb.AppendLine("| Requirement | Status | Implemented in | Verified by | Criteria |");
-        sb.AppendLine("| --- | --- | --- | --- | --- |");
+        var withMutation = model.Mutations != null;
+        sb.AppendLine("| Requirement | Status | Implemented in | Verified by | Criteria |" + (withMutation ? " Mutants detected |" : ""));
+        sb.AppendLine("| --- | --- | --- | --- | --- |" + (withMutation ? " --- |" : ""));
 
         foreach (var t in model.Requirements)
         {
@@ -68,7 +78,8 @@ public static class Reports
             var impl = t.IsImplemented ? string.Join("<br>", t.Implementations.Select(Link)) : r.IsEnforced ? "**missing**" : "–";
             var tests = t.IsVerified ? string.Join("<br>", t.Verifications.Select(v => Link(v) + (v.Criterion != null ? $" ({v.Criterion})" : "") + Icon(model.OutcomeOf(v)))) : r.IsEnforced ? "**missing**" : "–";
             var crit = r.Criteria.Count == 0 ? "–" : $"{t.CoveredCriteria}/{r.Criteria.Count}" + CriteriaOutcome(model, t);
-            sb.AppendLine($"| [{r.Id}]({Href(r.FilePath, r.Line + 1)}) {Escape(r.Title)}{SourceSuffix(r)} | {r.Status} | {impl} | {tests} | {crit} |");
+            var mutation = withMutation ? " " + MutationCell(model.MutationOf(t)) + " |" : "";
+            sb.AppendLine($"| [{r.Id}]({Href(r.FilePath, r.Line + 1)}) {Escape(r.Title)}{SourceSuffix(r)} | {r.Status} | {impl} | {tests} | {crit} |{mutation}");
         }
 
         var gaps = model.Requirements.Where(t => t.HasGap).ToList();
@@ -112,6 +123,38 @@ public static class Reports
             {
                 sb.AppendLine();
                 sb.AppendLine($"Tests that did not run (skipped or not in the results): {string.Join(", ", notRunCriteria)}.");
+            }
+        }
+
+        if (model.Mutations != null)
+        {
+            var weak = model.Requirements.Where(t => t.Requirement.IsEnforced)
+                .Select(t => (Trace: t, Mutation: model.MutationOf(t)!))
+                .Where(x => x.Mutation.Undetected > 0 || x.Mutation.CriteriaDetectingNothing.Any())
+                .OrderBy(x => x.Mutation.Score ?? 100)
+                .ToList();
+            if (weak.Count > 0)
+            {
+                sb.AppendLine();
+                sb.AppendLine("## Changes the tests do not detect");
+                sb.AppendLine();
+                sb.AppendLine("Each line is a change to the requirement's code that no test failed with: a test that should exist and does not.");
+                foreach (var (t, m) in weak)
+                {
+                    var r = t.Requirement;
+                    sb.AppendLine();
+                    sb.AppendLine($"**[{r.Id}]({Href(r.FilePath, r.Line + 1)}) {Escape(r.Title)}**: {MutationCell(m)}");
+                    sb.AppendLine();
+                    foreach (var mutant in m.Survivors.Take(5))
+                    {
+                        var file = t.Implementations.Select(l => l.File).FirstOrDefault(f => MutationReport.SameFile(mutant.File, f)) ?? mutant.File;
+                        sb.AppendLine($"- [{file}:{mutant.StartLine}]({Href(file, mutant.StartLine)}) {Escape(MutationAnalysis.Describe(mutant))}");
+                    }
+
+                    if (m.Undetected > 5) sb.AppendLine($"- … and {m.Undetected - 5} more.");
+                    var silent = m.CriteriaDetectingNothing.ToList();
+                    if (silent.Count > 0) sb.AppendLine($"- The tests of {string.Join(", ", silent)} detect none of the changes in this code.");
+                }
             }
         }
 
@@ -239,6 +282,22 @@ public static class Reports
             Emit("error", l.File, l.Line, "ST0001", "Unknown requirement", $"'{l.RequirementId}' does not exist in any spec");
         }
 
+        // Surviving mutants, on the line of code: "no test of BK-002 fails if this < becomes <=".
+        if (model.Mutations != null)
+        {
+            var emitted = 0;
+            foreach (var t in model.Requirements.Where(t => t.Requirement.IsEnforced))
+            {
+                foreach (var m in model.MutationOf(t)!.Survivors)
+                {
+                    if (emitted++ >= 50) break;
+                    var file = t.Implementations.Select(l => l.File).FirstOrDefault(f => MutationReport.SameFile(m.File, f)) ?? m.File;
+                    Emit("warning", file, m.StartLine, "Mutation", "Change not detected",
+                        $"{t.Requirement.Id}: {MutationAnalysis.Describe(m)}. No test of {t.Requirement.Id} fails with this change.");
+                }
+            }
+        }
+
         // Failing tests, on the criterion they verify: the PR shows which behaviour broke, not only which test.
         foreach (var t in model.Requirements)
         {
@@ -308,6 +367,14 @@ public static class Reports
                     result = Name(model.OutcomeOf(t, c.Id)),
                 }),
                 gap = t.HasGap,
+                mutation = model.MutationOf(t) is { } m ? new
+                {
+                    score = m.Score,
+                    detected = m.Detected,
+                    undetected = m.Undetected,
+                    survivors = m.Survivors.Select(x => new { file = x.File, line = x.StartLine, mutator = x.MutatorName, replacement = x.Replacement, status = x.Status.ToString() }),
+                    criteria = m.HasKillData ? m.Criteria.Select(c => new { id = c.CriterionId, detected = c.Detected }) : null,
+                } : null,
                 drift = new
                 {
                     locked = t.DriftInfo.IsLocked,
@@ -402,6 +469,30 @@ public static class Reports
             sb.AppendLine();
         }
 
+        if (model.MutationOf(t) is { } mutation && mutation.Total > 0)
+        {
+            sb.AppendLine("## Changes the tests do not detect");
+            sb.AppendLine();
+            var when = model.Mutations!.Path.Length > 0 && File.Exists(model.Mutations.Path) ? $" (mutation report of {File.GetLastWriteTime(model.Mutations.Path):yyyy-MM-dd HH:mm})" : "";
+            sb.AppendLine($"The tests detect {mutation.Detected} of {mutation.Total} mutants in this requirement's code{when}.");
+            foreach (var m in mutation.Survivors.Take(10))
+            {
+                var file = t.Implementations.Select(l => l.File).FirstOrDefault(f => MutationReport.SameFile(m.File, f)) ?? m.File;
+                sb.AppendLine($"- {file}:{m.StartLine} {MutationAnalysis.Describe(m)}");
+            }
+
+            if (mutation.Undetected > 10) sb.AppendLine($"- … and {mutation.Undetected - 10} more.");
+            var silent = mutation.CriteriaDetectingNothing.ToList();
+            if (silent.Count > 0) sb.AppendLine($"- The tests of {string.Join(", ", silent)} detect none of the changes in this code.");
+            if (mutation.Undetected > 0)
+            {
+                sb.AppendLine("- Each one is a test that should fail with that change and does not: add it to the criterion it belongs to. " +
+                              "The report may be older than the code: run `dotnet stryker --reporter json` again to check.");
+            }
+
+            sb.AppendLine();
+        }
+
         sb.AppendLine("## Current implementation");
         sb.AppendLine();
         if (t.IsImplemented) foreach (var l in t.Implementations) sb.AppendLine($"- {Link(l)}");
@@ -483,6 +574,10 @@ public static class Reports
     }
 
     private static string Link(TraceLink l) => $"`{l.Symbol}` ({l.File}:{l.Line})";
+
+    /// <summary>"82% (14/17)", "–" when the requirement's code has no mutants.</summary>
+    private static string MutationCell(RequirementMutation? m) =>
+        m?.Score is { } score ? $"{score}% ({m.Detected}/{m.Total})" + (score < 60 ? " ⚠️" : "") : "–";
 
     private static string Icon(TestOutcome? outcome) => outcome switch
     {

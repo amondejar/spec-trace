@@ -63,6 +63,12 @@ from the terminal.
 - Do not change the text of an `approved` requirement to fit your code. If the spec is ambiguous
   or wrong, say so and propose the spec change separately.
 
+## If the tests do not detect changes
+
+When `get_requirement` shows "Changes the tests do not detect" (from a Stryker mutation report), each line is a test
+that should fail with that change and does not. Add it to the criterion it belongs to; if no criterion describes that
+behaviour, ask instead of inventing the rule. The `strengthen_tests` MCP prompt contains these steps.
+
 ## If the spec changed (ST0010 / ST0011)
 
 If the build reports `ST0010` or `ST0011`, or `list_requirements` with `only_changed: true` returns the requirement,

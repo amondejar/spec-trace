@@ -1,6 +1,6 @@
 <Project>
   <!--
-    In a real repository all you need is:  <PackageReference Include="SpecTrace" Version="0.6.0-preview.1" />
+    In a real repository all you need is:  <PackageReference Include="SpecTrace" Version="0.7.0-preview.1" />
     Here the sample consumes the analyzer and the code fixes straight from the repository source code.
   -->
   <PropertyGroup>

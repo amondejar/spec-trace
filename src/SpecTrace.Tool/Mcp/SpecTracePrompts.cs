@@ -23,6 +23,10 @@ public static class SpecTracePrompts
             "Reviews a requirement (or every requirement of a spec file) for what makes it hard to build or test: ambiguity, statement and criteria that disagree, missing cases and conflicts with other requirements.",
             "target", "A requirement ID (BK-008) or a spec file (bookings.spec.md).",
             ReviewSpec),
+        new("strengthen_tests", "Strengthen a requirement's tests",
+            "Writes the tests that would catch the changes to a requirement's code that no test detects today (surviving mutants from Stryker).",
+            "id", "Requirement ID, for example BK-002.",
+            StrengthenTests),
         new("implement_requirement", "Implement a requirement",
             "Implements an approved requirement with one test per acceptance criterion, following the traceability rules of SpecTrace.",
             "id", "Requirement ID, for example ORD-002.",
@@ -113,6 +117,23 @@ public static class SpecTracePrompts
            statement or the criterion, or the question someone has to answer.
 
         Finish with a verdict: ready to approve, ready after small fixes, or needs decisions (list them).
+        """;
+
+    private static string StrengthenTests(string id) => $"""
+        Strengthen the tests of requirement {id}: they pass, but some changes to its code would go unnoticed.
+
+        1. Call get_requirement ({id}). Its "Changes the tests do not detect" section lists the surviving mutants from the
+           latest Stryker report: where the code was changed and how (for example `<` became `<=`, or a call was removed).
+           If there is no such section, say that a mutation report is needed: dotnet stryker --reporter json.
+        2. Read the code at each location with get_code, and the existing tests of the requirement.
+        3. For each surviving mutant, decide which acceptance criterion the behaviour belongs to and write (or tighten) a
+           test of that criterion that would fail with the change: usually a boundary value, an assertion on a value
+           that is not checked yet, or the error case. Mark it [Verifies(Requirements.<ID>, AcceptanceCriteria.<ID>.AC_n)].
+        4. If a mutant changes behaviour that no criterion describes, do not invent the rule: list it as a question for
+           the person, since the spec may be missing a criterion.
+        5. Do not change the production code. Run dotnet test; the person reruns Stryker to confirm.
+
+        Finish with, for each mutant: the test that now catches it, or why it is left as a question.
         """;
 
     private static string Implement(string id) => $"""

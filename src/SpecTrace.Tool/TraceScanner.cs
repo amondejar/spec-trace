@@ -58,8 +58,11 @@ public sealed record ProjectInfo(string Name, string Directory, string CatalogNa
 
 public sealed record TraceModel(string Root, SpecCatalog Catalog, IReadOnlyList<RequirementTrace> Requirements,
     IReadOnlyList<TraceLink> UnknownLinks, IReadOnlyList<ProjectInfo> Projects, SpecLock? Lock = null,
-    Results.TestResults? TestResults = null)
+    Results.TestResults? TestResults = null, Results.MutationReport? Mutations = null)
 {
+    /// <summary>Mutants in the requirement's code and how many its tests detect, or null without a mutation report.</summary>
+    public Results.RequirementMutation? MutationOf(RequirementTrace trace) => Results.MutationAnalysis.For(this, trace);
+
     public bool HasLock => Lock != null;
 
     public bool HasTestResults => TestResults != null;

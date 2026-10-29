@@ -28,6 +28,10 @@ internal static class Cli
                                                criterion's tests pass; repeatable
                             --fail-on-failing  exit code 1 if a criterion has a failing test (needs --test-results)
                             --base <ref>       adds the requirements touched since that branch (see impact)
+                            --mutation <path>  Stryker mutation-report.json, or a folder (the newest one in it):
+                                               mutants detected in each requirement's code, and which survive
+                            --min-mutation-score <n>
+                                               exit code 1 if a requirement's mutants detected are below n %
           lock            Records the current version of the spec as reviewed (spectrace.lock).
                             --requirement <ID> only that requirement (repeatable); without it, all active ones
                             --check            does not write: exit code 1 if there are unreviewed changes
@@ -100,6 +104,7 @@ internal static class Cli
                     var model = TraceScanner.Scan(config);
                     var results = opts.GetAll("test-results");
                     if (results.Count > 0) model = model with { TestResults = SpecTrace.Tool.Results.TestResults.Load(results) };
+                    if (opts.Get("mutation") is { } mutation) model = model with { Mutations = SpecTrace.Tool.Results.MutationReport.Load(mutation) };
                     var repoRoot = Environment.GetEnvironmentVariable("GITHUB_WORKSPACE") is { Length: > 0 } ws
                         ? ws
                         : Directory.GetCurrentDirectory();
@@ -115,7 +120,10 @@ internal static class Cli
                     var gaps = model.Requirements.Count(r => r.HasGap) + model.UnknownLinks.Count;
                     var drift = model.Requirements.Count(r => r.HasDrift);
                     var failing = model.Requirements.Sum(t => t.Requirement.Criteria.Count(c => model.OutcomeOf(t, c.Id) == SpecTrace.Tool.Results.TestOutcome.Failed));
-                    return (opts.Has("fail-on-gaps") && gaps > 0) || (opts.Has("fail-on-drift") && drift > 0) || (opts.Has("fail-on-failing") && failing > 0) ? 1 : 0;
+                    var weak = opts.Get("min-mutation-score") is { } min && double.TryParse(min, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var threshold)
+                        ? model.Requirements.Count(t => t.Requirement.IsEnforced && model.MutationOf(t)?.Score is { } score && score < threshold)
+                        : 0;
+                    return (opts.Has("fail-on-gaps") && gaps > 0) || (opts.Has("fail-on-drift") && drift > 0) || (opts.Has("fail-on-failing") && failing > 0) || weak > 0 ? 1 : 0;
                 }
 
                 case "impact":
