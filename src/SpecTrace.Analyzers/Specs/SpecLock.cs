@@ -43,6 +43,11 @@ namespace SpecTrace.Specs
         public string Id { get; }
         public string Statement { get; }
         public IReadOnlyDictionary<string, string> Criteria { get; }
+
+        /// <summary>The entry as written in the file: equal lines are the same review.</summary>
+        public string Line =>
+            Id.ToUpperInvariant() + " statement:" + Statement +
+            string.Concat(Criteria.OrderBy(c => c.Key, StringComparer.Ordinal).Select(c => " " + c.Key + ":" + c.Value));
     }
 
     /// <summary>
@@ -60,34 +65,86 @@ namespace SpecTrace.Specs
             "# Written by `dotnet spectrace lock`. If a requirement's text changes, the build reports ST0010/ST0011\n" +
             "# until someone reviews the code and tests and runs `dotnet spectrace lock --requirement <ID>` again.\n";
 
-        private readonly Dictionary<string, SpecLockEntry> _entries;
+        // Every entry of each ID, in file order. After a merge with "merge=union" a requirement can have one line per
+        // branch: identical lines collapse, different ones are all kept and the one matching the spec text is used.
+        private readonly Dictionary<string, List<SpecLockEntry>> _entries;
 
-        public SpecLock(IEnumerable<SpecLockEntry> entries)
+        public SpecLock(IEnumerable<SpecLockEntry> entries, IReadOnlyList<int>? conflictMarkerLines = null)
         {
-            _entries = new Dictionary<string, SpecLockEntry>(StringComparer.OrdinalIgnoreCase);
-            foreach (var e in entries) _entries[e.Id] = e;
+            _entries = new Dictionary<string, List<SpecLockEntry>>(StringComparer.OrdinalIgnoreCase);
+            foreach (var e in entries)
+            {
+                if (!_entries.TryGetValue(e.Id, out var list)) _entries[e.Id] = list = new List<SpecLockEntry>();
+                if (!list.Any(x => x.Line == e.Line)) list.Add(e);
+            }
+
+            ConflictMarkerLines = conflictMarkerLines ?? Array.Empty<int>();
         }
 
-        public IEnumerable<SpecLockEntry> Entries => _entries.Values.OrderBy(e => e.Id, StringComparer.Ordinal);
+        /// <summary>One entry per requirement (the last one when there are several).</summary>
+        public IEnumerable<SpecLockEntry> Entries => _entries.Values.Select(l => l[l.Count - 1]).OrderBy(e => e.Id, StringComparer.Ordinal);
 
         public int Count => _entries.Count;
 
-        public SpecLockEntry? Find(string id) => _entries.TryGetValue(id, out var e) ? e : null;
+        /// <summary>IDs with more than one different entry, usually left by merging two branches.</summary>
+        public IReadOnlyList<string> Duplicates => _entries.Where(e => e.Value.Count > 1).Select(e => e.Key).OrderBy(k => k, StringComparer.Ordinal).ToList();
+
+        /// <summary>Zero-based lines with git conflict markers (&lt;&lt;&lt;&lt;&lt;&lt;&lt;, =======, &gt;&gt;&gt;&gt;&gt;&gt;&gt;).</summary>
+        public IReadOnlyList<int> ConflictMarkerLines { get; }
+
+        public SpecLockEntry? Find(string id) => _entries.TryGetValue(id, out var l) ? l[l.Count - 1] : null;
+
+        /// <summary>
+        /// The entry to compare <paramref name="requirement"/> with: the one with the fewest differences from its current
+        /// text. With a single entry, that one. A version is reviewed if any recorded review matches it.
+        /// </summary>
+        public SpecLockEntry? FindFor(SpecRequirement requirement)
+        {
+            if (!_entries.TryGetValue(requirement.Id, out var list)) return null;
+            return list
+                .Select((e, i) => (Entry: e, Index: i, Changes: Changes(SpecDrift.Compare(requirement, e))))
+                .OrderBy(x => x.Changes)
+                .ThenByDescending(x => x.Index)
+                .First().Entry;
+        }
 
         public SpecLock With(SpecLockEntry entry)
         {
-            var copy = _entries.Values.Where(e => !string.Equals(e.Id, entry.Id, StringComparison.OrdinalIgnoreCase)).ToList();
+            var copy = _entries.Values.SelectMany(l => l).Where(e => !string.Equals(e.Id, entry.Id, StringComparison.OrdinalIgnoreCase)).ToList();
             copy.Add(entry);
             return new SpecLock(copy);
         }
+
+        /// <summary>
+        /// Keeps a single entry per requirement: for the ones in <paramref name="requirements"/>, the entry that matches their
+        /// text best; for the rest, the last one. Used before writing the file, so duplicates left by a merge are tidied
+        /// without losing a review.
+        /// </summary>
+        public SpecLock Resolve(IEnumerable<SpecRequirement> requirements)
+        {
+            var byId = requirements.GroupBy(r => r.Id, StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+            return new SpecLock(_entries.Values.Select(l =>
+                l.Count > 1 && byId.TryGetValue(l[0].Id, out var r) ? FindFor(r)! : l[l.Count - 1]));
+        }
+
+        private static int Changes(SpecDrift drift) => (drift.StatementChanged ? 1 : 0) + drift.ChangedCriteria.Count;
 
         /// <summary>Reads the file; ignores comments and lines it does not understand.</summary>
         public static SpecLock Parse(string text)
         {
             var entries = new List<SpecLockEntry>();
-            foreach (var raw in (text ?? string.Empty).Replace("\r\n", "\n").Split('\n'))
+            var markers = new List<int>();
+            var lines = (text ?? string.Empty).Replace("\r\n", "\n").Split('\n');
+            for (var i = 0; i < lines.Length; i++)
             {
-                var line = raw.Trim();
+                var line = lines[i].Trim();
+                if (line.StartsWith("<<<<<<<", StringComparison.Ordinal) || line.StartsWith(">>>>>>>", StringComparison.Ordinal) ||
+                    line.StartsWith("|||||||", StringComparison.Ordinal) || line == "=======")
+                {
+                    markers.Add(i);
+                    continue;
+                }
+
                 if (line.Length == 0 || line.StartsWith("#", StringComparison.Ordinal)) continue;
 
                 var parts = line.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
@@ -106,7 +163,7 @@ namespace SpecTrace.Specs
                 if (statement != null) entries.Add(new SpecLockEntry(parts[0], statement, criteria));
             }
 
-            return new SpecLock(entries);
+            return new SpecLock(entries, markers);
         }
 
         public string Render()

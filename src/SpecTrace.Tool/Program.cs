@@ -26,6 +26,13 @@ internal static class Cli
           lock            Records the current version of the spec as reviewed (spectrace.lock).
                             --requirement <ID> only that requirement (repeatable); without it, all active ones
                             --check            does not write: exit code 1 if there are unreviewed changes
+                                               or conflict markers
+                            --tidy             only tidies the file after a merge (duplicate lines, conflict
+                                               markers), keeping every review that matches the spec
+          ids             Requirement IDs used twice, usually by two branches that proposed "the next ID".
+                            --fix              renumbers what this branch added (spec, spectrace.lock and the
+                                               code and tests added by the branch); review it with git diff
+                            --base <ref>       branch to compare with (default origin/main, origin/master, main...)
           context <ID>    Requirement context for an agent: statement, criteria, status and how to mark the work.
           scaffold-tests  xUnit skeletons for criteria without tests.
                             --project <dir>    folder of the test project (required)
@@ -134,6 +141,9 @@ internal static class Cli
                 case "lock":
                     return Lock(opts, config);
 
+                case "ids":
+                    return Ids(opts, config);
+
                 case "init":
                     return Init(opts);
 
@@ -143,11 +153,51 @@ internal static class Cli
                     return 1;
             }
         }
-        catch (Exception ex) when (ex is ArgumentException or StoryException)
+        catch (Exception ex) when (ex is ArgumentException or StoryException or InvalidOperationException)
         {
             Console.Error.WriteLine(ex.Message);
             return 2;
         }
+    }
+
+    /// <summary>
+    /// IDs used twice after two branches proposed "the next ID" of the same spec. Without --fix it only reports them
+    /// (exit code 1), so it can run in CI right after a merge.
+    /// </summary>
+    private static int Ids(Options opts, SpecTraceConfig config)
+    {
+        var plan = SpecTrace.Tool.Authoring.IdFixer.Plan(config, opts.Get("base"));
+        foreach (var note in plan.Notes) Console.WriteLine("Note: " + note);
+        var against = plan.Base != null ? $" (compared with {plan.Base})" : "";
+
+        if (!plan.HasWork)
+        {
+            Console.WriteLine($"No requirement ID is used twice{against}.");
+            return 0;
+        }
+
+        Console.WriteLine($"Requirement IDs used twice{against}:");
+        foreach (var c in plan.Collisions)
+        {
+            var o = c.Occurrence;
+            Console.WriteLine($"  {o.Id} \"{o.Title}\" ({o.File}:{o.Line + 1}) → {c.NewId ?? "rename by hand"}: {c.Reason}");
+        }
+
+        if (!opts.Has("fix"))
+        {
+            Console.WriteLine("\nRun `dotnet spectrace ids --fix` to renumber the requirements this branch added.");
+            return 1;
+        }
+
+        Console.WriteLine();
+        foreach (var change in SpecTrace.Tool.Authoring.IdFixer.Apply(config, plan))
+        {
+            Console.WriteLine($"Renumbered {change.OldId} → {change.NewId} in {string.Join(", ", change.Files)} " +
+                              $"({change.CodeReferences} code reference(s), {change.LockLines} spectrace.lock line(s)).");
+        }
+
+        Console.WriteLine("Review it with `git diff` and build: ST0007 should be gone.");
+        return plan.Collisions.Any(c => c.NewId == null) ? 1 : 0;
     }
 
     private static int ShowStory(Options opts, SpecTraceConfig config)
@@ -233,6 +283,18 @@ internal static class Cli
         // MCP server registration for agents that read .mcp.json at the project root (for example Claude Code).
         Create(".mcp.json", "{\n  \"mcpServers\": {\n    \"spectrace\": {\n      \"command\": \"dotnet\",\n      \"args\": [\"spectrace\", \"mcp\"]\n    }\n  }\n}\n");
 
+        // Two branches that review different requirements add lines next to each other in spectrace.lock: with the union
+        // driver git keeps both instead of reporting a conflict (local merges and rebases; GitHub's web merge ignores it).
+        const string unionLine = "spectrace.lock merge=union";
+        var attributes = Path.Combine(root, ".gitattributes");
+        var existing = File.Exists(attributes) ? File.ReadAllText(attributes) : null;
+        if (existing == null || !existing.Replace("\r\n", "\n").Split('\n').Any(l => l.Trim().StartsWith("spectrace.lock", StringComparison.Ordinal)))
+        {
+            var prefix = string.IsNullOrEmpty(existing) || existing.EndsWith("\n", StringComparison.Ordinal) ? "" : "\n";
+            File.AppendAllText(attributes, prefix + unionLine + "\n");
+            created.Add(existing == null ? ".gitattributes" : ".gitattributes (spectrace.lock merge=union)");
+        }
+
         Console.WriteLine(created.Count == 0 ? "Everything already exists." : "Created:\n" + string.Join("\n", created.Select(c => "  " + c)));
         Console.WriteLine("\nNext step: add the package to your projects with  dotnet add package SpecTrace --prerelease");
         return 0;
@@ -256,6 +318,17 @@ internal static class Cli
                 return 0;
             }
 
+            if (model.Lock!.ConflictMarkerLines.Count > 0)
+            {
+                Console.WriteLine($"spectrace.lock has git conflict markers (line {model.Lock.ConflictMarkerLines[0] + 1}): run `dotnet spectrace lock --tidy`.");
+            }
+
+            if (model.Lock.Duplicates.Count > 0)
+            {
+                Console.WriteLine($"Merged reviews for {string.Join(", ", model.Lock.Duplicates)} (one line per branch); the one matching the spec is used. " +
+                                  "`dotnet spectrace lock --tidy` leaves one line each.");
+            }
+
             foreach (var t in drifted)
             {
                 var what = new List<string>();
@@ -265,11 +338,25 @@ internal static class Cli
             }
 
             Console.WriteLine(drifted.Count == 0 ? "No changes pending review." : $"{drifted.Count} requirement(s) with unreviewed changes.");
-            return drifted.Count == 0 ? 0 : 1;
+            return drifted.Count == 0 && model.Lock.ConflictMarkerLines.Count == 0 ? 0 : 1;
         }
 
         var ids = opts.GetAll("requirement");
-        var current = model.Lock ?? new SpecTrace.Specs.SpecLock(Array.Empty<SpecTrace.Specs.SpecLockEntry>());
+        // After a merge the file can have one line per branch for a requirement: keep the review that matches the spec.
+        var merged = model.Lock ?? new SpecTrace.Specs.SpecLock(Array.Empty<SpecTrace.Specs.SpecLockEntry>());
+        var tidied = merged.Duplicates.Count + (merged.ConflictMarkerLines.Count > 0 ? 1 : 0);
+        var current = merged.Resolve(model.Catalog.Requirements);
+
+        if (opts.Has("tidy"))
+        {
+            if (!model.HasLock) throw new ArgumentException("There is no spectrace.lock to tidy.");
+            File.WriteAllText(path, current.Render());
+            Console.WriteLine(tidied == 0
+                ? "spectrace.lock was already tidy."
+                : $"spectrace.lock tidied: {merged.Duplicates.Count} requirement(s) had one line per branch" +
+                  (merged.ConflictMarkerLines.Count > 0 ? " and the conflict markers were removed" : "") + ". No review was added or changed.");
+            return 0;
+        }
         SpecTrace.Specs.SpecLock updated;
         int changed = 0, added = 0, removed = 0;
 

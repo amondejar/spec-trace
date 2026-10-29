@@ -64,6 +64,12 @@ its text changed after the last review. Check the code or tests named in the war
 and update them. **Do not run `dotnet spectrace lock`**: recording the review is a person's job.
 Tell them what you reviewed and what you changed.
 
+## After merging main
+
+If the build reports `ST0007` (duplicate requirement ID) after bringing main into your branch, another branch took
+the same "next ID". Run `dotnet spectrace ids --fix`: it renumbers only the requirement your branch added, with its
+code and tests. Show the person the `git diff`.
+
 ## To finish
 
 1. `dotnet build`: no `ST0001`, `ST0002`, `ST0003`, `ST0004` or `ST0005` may remain for the requirement.

@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.5.1-preview.1
+
+### Added
+
+- **Team work: merge-safe `spectrace.lock`.**
+  - When a requirement has several lines (one per branch after a merge), the one that matches the spec text is used:
+    a version counts as reviewed if any recorded review matches it. Before, the last line won.
+  - Git conflict markers left in `spectrace.lock` are reported (ST0008 on the lock, `lock --check` fails) and both
+    sides are still read.
+  - `dotnet spectrace lock --tidy`: one line per requirement, keeping the review that matches the spec; no review is
+    added or changed. Any `lock` also tidies the file.
+  - `dotnet spectrace init` adds `spectrace.lock merge=union` to `.gitattributes`, so local merges and rebases keep
+    the reviews of both branches without a conflict.
+- **`dotnet spectrace ids`**: requirement IDs used twice, typically by two branches that proposed "the next ID".
+  `--fix` compares the branch with its base (`--base`, default `origin/main`) through git and renumbers only what the
+  branch added: the requirement heading, its `spectrace.lock` line, and the references on the lines of code and tests
+  the branch added. Works after merging main and before.
+- `propose_requirement` skips IDs already used on the base branch, and rejects an explicit ID that is.
+- README: "Working as a team" (CODEOWNERS, branch protection, parallel branches).
+
 ## 0.5.0-preview.1
 
 ### Added

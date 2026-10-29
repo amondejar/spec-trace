@@ -143,9 +143,8 @@ dotnet spectrace lock --check                  # in CI: fail if there are unrevi
 | Title, status or whitespace | — | — | Nothing: behavior is unchanged |
 | A new criterion | ST0005 if it has no test | — | Write its test |
 
-Commit `spectrace.lock` together with the review. It has one line per requirement, so diffs are readable and conflicts
-only touch the requirement that changed. Recording a review is a human decision: the skill and the MCP server ask
-agents not to run `lock` on their own.
+Commit `spectrace.lock` together with the review. It has one line per requirement, so diffs are readable. Recording a
+review is a human decision: the skill and the MCP server ask agents not to run `lock` on their own.
 
 ## In the IDE
 
@@ -168,7 +167,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: amondejar/spec-trace@v0.5.0
+      - uses: amondejar/spec-trace@v0.5.1
         with:
           root: .              # folder containing spectrace.json
           fail-on-gaps: false  # true to block the PR when there are gaps
@@ -252,6 +251,45 @@ The prefix comes from the feature folder (`001-photo-albums` → `PA1`) or the c
 set with `--prefix`. Re-importing is safe: IDs (matched by title in OpenSpec), statuses you changed and criteria you
 added by hand to requirements without criteria are kept. `--dry-run` shows what would happen.
 Examples in [`samples/Import`](https://github.com/amondejar/spec-trace/tree/main/samples/Import).
+
+## Working as a team
+
+Everything SpecTrace knows lives in the repository (specs, `spectrace.lock`, attributes), so several people and their
+agents work with it the way they work with any code: branches, pull requests and reviews.
+
+- **Approving a spec is reviewing a pull request.** Changing `Status: proposed` to `approved` goes through a PR, and
+  git records who approved it. Require the right reviewers with `CODEOWNERS`:
+
+  ```text
+  /specs/          @product-owner @tech-lead
+  /spectrace.lock  @tech-lead
+  ```
+
+- **The build is the gate.** With the GitHub Action (`fail-on-gaps`, `fail-on-drift`) and branch protection, nothing
+  is merged with approved requirements that are not implemented, criteria without tests or unreviewed spec changes.
+
+Two things happen when branches run in parallel, and SpecTrace handles both:
+
+**Reviews from two branches.** Two branches that review different requirements add neighbouring lines to
+`spectrace.lock`. `dotnet spectrace init` adds `spectrace.lock merge=union` to `.gitattributes`, so local merges and
+rebases keep both lines instead of reporting a conflict. GitHub's web merge does not apply merge drivers: if a pull
+request shows a conflict in `spectrace.lock`, update the branch locally (`git merge origin/main`), or keep both sides
+in the web editor. Either way it is safe: when a requirement has several lines, the one that matches the spec text
+is used, and leftover conflict markers are reported (ST0008) instead of breaking anything. `dotnet spectrace lock
+--tidy` leaves one line per requirement without reviewing anything.
+
+**Two branches propose the same ID.** Both take "the next ID" of a spec, and after merging the build reports ST0007.
+
+```bash
+dotnet spectrace ids          # IDs used twice, compared with origin/main (exit code 1)
+dotnet spectrace ids --fix    # renumbers what this branch added
+```
+
+`--fix` compares the branch with its base through git and renumbers only the requirement this branch added: its
+heading, its `spectrace.lock` line, and the references (`Requirements.BK_009`, `AcceptanceCriteria.BK_009.AC_1`,
+`"BK-009"`) on the lines of code and tests this branch added. The other requirement and its code keep their ID. It
+also works before merging, when main already uses the ID. Review the result with `git diff`. To make collisions
+rarer, `propose_requirement` skips the IDs already used on the base branch.
 
 ## User stories (GitHub Issues)
 

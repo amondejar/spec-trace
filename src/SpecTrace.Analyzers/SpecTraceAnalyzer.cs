@@ -58,7 +58,9 @@ namespace SpecTrace.Analyzers
             // spectrace.lock (optional): reviewed version of each requirement, to detect spec changes.
             var lockFile = start.Options.AdditionalFiles.FirstOrDefault(f =>
                 string.Equals(System.IO.Path.GetFileName(f.Path), SpecLock.FileName, StringComparison.OrdinalIgnoreCase));
-            var specLock = lockFile == null ? null : SpecLock.Parse(lockFile.GetText(start.CancellationToken)?.ToString() ?? string.Empty);
+            var lockText = lockFile?.GetText(start.CancellationToken);
+            var specLock = lockFile == null ? null : SpecLock.Parse(lockText?.ToString() ?? string.Empty);
+            if (lockFile != null) texts[lockFile.Path] = lockText;
 
             var implementations = new ConcurrentBag<(string Id, string Symbol)>();
             var verifications = new ConcurrentBag<(string Id, string? Criterion, string Symbol)>();
@@ -139,6 +141,13 @@ namespace SpecTrace.Analyzers
                             : Diagnostics.SpecFormat;
                         end.ReportDiagnostic(Diagnostic.Create(rule, At(issue.FilePath, issue.Line), issue.Message));
                     }
+
+                    // A merge left spectrace.lock half resolved: the reviews on both sides are still read, but the file needs tidying.
+                    if (lockFile != null && specLock != null && specLock.ConflictMarkerLines.Count > 0)
+                    {
+                        end.ReportDiagnostic(Diagnostic.Create(Diagnostics.SpecFormat, At(lockFile.Path, specLock.ConflictMarkerLines[0]),
+                            "spectrace.lock has git conflict markers. Run `dotnet spectrace lock --tidy` to remove them and keep the reviews of both branches"));
+                    }
                 }
 
                 var implementedHere = new HashSet<string>(implementations.Select(i => i.Id), StringComparer.OrdinalIgnoreCase);
@@ -156,7 +165,7 @@ namespace SpecTrace.Analyzers
                     {
                         foreach (var req in catalog.Requirements.Where(r => r.IsEnforced && implementedHere.Contains(r.Id)))
                         {
-                            if (!SpecDrift.Compare(req, specLock.Find(req.Id)).StatementChanged) continue;
+                            if (!SpecDrift.Compare(req, specLock.FindFor(req)).StatementChanged) continue;
                             var symbols = string.Join(", ", implementations.Where(i => string.Equals(i.Id, req.Id, StringComparison.OrdinalIgnoreCase))
                                 .Select(i => i.Symbol).Distinct().OrderBy(n => n, StringComparer.Ordinal));
                             end.ReportDiagnostic(Diagnostic.Create(Diagnostics.StatementChanged, At(req.FilePath, req.Line), req.Id, symbols));
@@ -193,7 +202,7 @@ namespace SpecTrace.Analyzers
                 {
                     foreach (var req in catalog.Requirements.Where(r => r.IsEnforced))
                     {
-                        foreach (var c in SpecDrift.Compare(req, specLock.Find(req.Id)).ChangedCriteria)
+                        foreach (var c in SpecDrift.Compare(req, specLock.FindFor(req)).ChangedCriteria)
                         {
                             var tests = verified
                                 .Where(v => string.Equals(v.Id, req.Id, StringComparison.OrdinalIgnoreCase) && v.Criterion == c.Id)

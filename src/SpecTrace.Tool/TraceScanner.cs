@@ -92,7 +92,7 @@ public static class TraceScanner
             .Select(r => new RequirementTrace(r,
                 links.Where(l => l.Kind == LinkKind.Implements && Same(l.RequirementId, r.Id)).ToList(),
                 links.Where(l => l.Kind == LinkKind.Verifies && Same(l.RequirementId, r.Id)).ToList(),
-                specLock == null ? null : SpecDrift.Compare(r, specLock.Find(r.Id))))
+                specLock == null ? null : SpecDrift.Compare(r, specLock.FindFor(r))))
             .ToList();
         var unknown = links.Where(l => !catalog.TryGet(l.RequirementId, out _)).ToList();
 

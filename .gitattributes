@@ -3,3 +3,5 @@
 *.sh text eol=lf
 *.yml text eol=lf
 *.png binary
+# Reviews from two branches: keep both lines instead of a conflict (see "Working as a team" in the README).
+spectrace.lock merge=union

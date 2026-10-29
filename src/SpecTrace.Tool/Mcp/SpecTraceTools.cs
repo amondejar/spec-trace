@@ -311,16 +311,24 @@ public sealed class SpecTraceTools
         var catalog = TraceScanner.Scan(_config).Catalog;
         var existing = File.Exists(path) ? SpecParser.Parse(path, File.ReadAllText(path)).Requirements.Select(r => r.Id).ToList() : new List<string>();
 
+        // IDs already taken on the base branch (work merged after this branch started), so two people do not both
+        // propose "the next ID". Best effort: without git or a base branch it is empty.
+        var (baseName, baseIds) = BaseIds();
+
         var id = OptionalString(args, "id")?.Trim().ToUpperInvariant();
         if (id == null)
         {
             if (existing.Count == 0) throw new ArgumentException("The spec is empty: give the requirement ID (for example PAY-001).");
-            id = SpecWriter.NextId(existing);
-            while (catalog.TryGet(id, out _)) id = SpecWriter.NextId(existing.Append(id));
+            var first = SpecWriter.NextId(existing);
+            var prefix = first.Substring(0, first.LastIndexOf('-'));
+            var taken = existing.Concat(baseIds).ToList();
+            id = SpecWriter.NextId(taken, prefix);
+            while (catalog.TryGet(id, out _)) id = SpecWriter.NextId(taken.Append(id), prefix);
         }
 
         if (!SpecWriter.IsValidId(id)) throw new ArgumentException($"'{id}' is not a valid ID (PREFIX-123).");
         if (catalog.TryGet(id, out var clash)) throw new ArgumentException($"ID {id} already exists in {clash.FilePath}.");
+        if (baseIds.Contains(id)) throw new ArgumentException($"ID {id} is already used on {baseName}: pull it into this branch or leave the ID empty to get a free one.");
 
         var source = OptionalString(args, "source")?.Trim();
         if (source != null && _tracker.Value.TryParse(source, out var story)) source = story.Url;
@@ -346,6 +354,29 @@ public sealed class SpecTraceTools
                     "It is not enforced until someone approves it (Status: approved)." +
                     (questions.Count > 0 ? $" {questions.Count} open question(s) recorded for the reviewer." : "") +
                     (siblings.Count > 0 ? $" The same source is cited by {string.Join(", ", siblings)}." : ""));
+    }
+
+    private (string? Base, HashSet<string> Ids) BaseIds()
+    {
+        var ids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            var git = Git.Open(_config.Root);
+            var @base = git?.DefaultBase();
+            if (git == null || @base == null) return (null, ids);
+
+            var specsDir = git.Prefix + _config.Specs.Replace('\\', '/').TrimEnd('/');
+            foreach (var path in git.ListFiles(@base, specsDir).Where(SpecParser.IsSpecFile))
+            {
+                foreach (var r in SpecParser.Parse(path, git.Show(@base, path)).Requirements) ids.Add(r.Id);
+            }
+
+            return (@base, ids);
+        }
+        catch (InvalidOperationException)
+        {
+            return (null, ids);
+        }
     }
 
     private bool SameSource(string a, string b) =>
