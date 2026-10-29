@@ -130,7 +130,7 @@ public static class Reports
         {
             var weak = model.Requirements.Where(t => t.Requirement.IsEnforced)
                 .Select(t => (Trace: t, Mutation: model.MutationOf(t)!))
-                .Where(x => x.Mutation.Undetected > 0 || x.Mutation.CriteriaDetectingNothing.Any())
+                .Where(x => x.Mutation.Undetected > 0 || (x.Mutation.Exact && x.Mutation.CriteriaDetectingNothing.Any()))
                 .OrderBy(x => x.Mutation.Score ?? 100)
                 .ToList();
             if (weak.Count > 0)
@@ -152,8 +152,7 @@ public static class Reports
                     }
 
                     if (m.Undetected > 5) sb.AppendLine($"- … and {m.Undetected - 5} more.");
-                    var silent = m.CriteriaDetectingNothing.ToList();
-                    if (silent.Count > 0) sb.AppendLine($"- The tests of {string.Join(", ", silent)} detect none of the changes in this code.");
+                    if (MutationAnalysis.SilentCriteriaLine(m) is { } silent) sb.AppendLine("- " + silent);
                 }
             }
         }
@@ -374,6 +373,7 @@ public static class Reports
                     undetected = m.Undetected,
                     survivors = m.Survivors.Select(x => new { file = x.File, line = x.StartLine, mutator = x.MutatorName, replacement = x.Replacement, status = x.Status.ToString() }),
                     criteria = m.HasKillData ? m.Criteria.Select(c => new { id = c.CriterionId, detected = c.Detected }) : null,
+                    criteriaExact = m.Exact,
                 } : null,
                 drift = new
                 {
@@ -482,8 +482,7 @@ public static class Reports
             }
 
             if (mutation.Undetected > 10) sb.AppendLine($"- … and {mutation.Undetected - 10} more.");
-            var silent = mutation.CriteriaDetectingNothing.ToList();
-            if (silent.Count > 0) sb.AppendLine($"- The tests of {string.Join(", ", silent)} detect none of the changes in this code.");
+            if (MutationAnalysis.SilentCriteriaLine(mutation) is { } silent) sb.AppendLine("- " + silent);
             if (mutation.Undetected > 0)
             {
                 sb.AppendLine("- Each one is a test that should fail with that change and does not: add it to the criterion it belongs to. " +

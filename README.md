@@ -50,6 +50,9 @@ SpecTrace links **spec → code → test** at build time, in the IDE, in pull re
 
 4. `dotnet build` checks traceability; `dotnet spectrace report` prints the full matrix.
 
+`dotnet spectrace --version` prints the version of the tool. An option a command does not know is an error, with
+the closest valid one suggested.
+
 ## Packages
 
 | Package | Contents |
@@ -179,7 +182,7 @@ jobs:
         with:
           dotnet-version: 8.0.x
       - run: dotnet test --logger trx --results-directory TestResults
-      - uses: amondejar/spec-trace@v0.7.0
+      - uses: amondejar/spec-trace@v0.7.1
         if: always()                 # also when tests fail: the report says which criteria broke
         with:
           root: .                    # folder containing spectrace.json
@@ -243,6 +246,24 @@ cd ../.. && dotnet spectrace report --mutation tests/MyApp.Tests/StrykerOutput
 - src/RoomBooking.Api/Domain/BookingService.cs:199 EqualityOperator: `<=` (survived)
 - The tests of AC-4 detect none of the changes in this code.
 ```
+
+Two Stryker.NET settings make the result sharper (`stryker-config.json` in the test project):
+
+```json
+{
+  "stryker-config": {
+    "reporters": ["json", "html"],
+    "disable-bail": true,
+    "ignore-mutations": ["string"]
+  }
+}
+```
+
+- `disable-bail` runs every test against each mutant instead of stopping at the first one that fails. It is slower,
+  but then the report knows *every* test that detects a change, and "the tests of AC-2 detect none of the changes" is
+  exact. Without it, SpecTrace only says that a criterion's tests were never the first to fail.
+- `ignore-mutations: ["string"]` skips changes to string literals, which in most services are error messages that the
+  tests do not (and need not) compare word by word.
 
 Each surviving mutant is a test that should exist: the PR gets a warning on that line of code. `--min-mutation-score
 <n>` fails when a requirement is below n %. The MCP tool `get_requirement` finds the newest report in a

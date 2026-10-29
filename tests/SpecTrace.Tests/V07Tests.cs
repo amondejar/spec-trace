@@ -100,7 +100,8 @@ public class CancelTests
         };
 
         /// <summary>A report shaped like mutation-testing-report-schema 3.x.</summary>
-        private static string Report(string serviceKey = "src/BookingService.cs") => new JsonObject
+        /// <param name="everyKiller">Like Stryker with --disable-bail: a mutant lists every test that detects it.</param>
+        private static string Report(string serviceKey = "src/BookingService.cs", bool everyKiller = true) => new JsonObject
         {
             ["schemaVersion"] = "2",
             ["thresholds"] = new JsonObject { ["high"] = 80, ["low"] = 60 },
@@ -117,7 +118,8 @@ public class CancelTests
                         Mutant("4", 7, "CompileError", "Statement"),
                         Mutant("5", 7, "Timeout", "Statement"),
                         Mutant("6", 11, "Killed", "BooleanLiteral", "false", new[] { "t3" }),
-                        Mutant("7", 13, "Survived", "Initializer")),
+                        Mutant("7", 13, "Survived", "Initializer"),
+                        Mutant("8", 11, "Killed", "Statement", null, everyKiller ? new[] { "t3", "t1" } : new[] { "t3" })),
                 },
             },
             ["testFiles"] = new JsonObject
@@ -143,7 +145,8 @@ public class CancelTests
         {
             var report = MutationReport.Parse(JsonDocument.Parse(Report()).RootElement);
 
-            Assert.Equal(7, report.Mutants.Count);
+            Assert.Equal(8, report.Mutants.Count);
+            Assert.True(report.ListsEveryKiller);
             Assert.Equal(new[] { "Shop.Tests.BookingTests.Creates" }, report.Mutants[0].KilledBy.ToArray());
             Assert.Equal(MutantStatus.NoCoverage, report.Mutants[2].Status);
             Assert.Equal(7, report.Mutants[1].StartLine);
@@ -204,16 +207,44 @@ public class CancelTests
             var json = JsonNode.Parse(Reports.Json(model))!;
             var github = Reports.GitHub(model, _root);
 
-            Assert.Contains("- Mutants detected by the tests: **60%** (3/5) in the code of the requirements", md);
+            Assert.Contains("- Mutants detected by the tests: **66%** (4/6) in the code of the requirements", md);
             Assert.Contains("| Criteria | Mutants detected |", md);
             Assert.Contains("| 50% (2/4) ⚠️ |", md);
-            Assert.Contains("| 100% (1/1) |", md);
+            Assert.Contains("| 100% (2/2) |", md);
             Assert.Contains("## Changes the tests do not detect", md);
             Assert.Contains("[src/BookingService.cs:7](src/BookingService.cs#L7) EqualityOperator: `<` (survived)", md);
             Assert.Contains("[src/BookingService.cs:6](src/BookingService.cs#L6) BooleanLiteral: `true` (no test runs this code)", md);
             Assert.Contains("- The tests of AC-2 detect none of the changes in this code.", md);
             Assert.Equal(50, json["requirements"]![0]!["mutation"]!["score"]!.GetValue<double>());
             Assert.Contains("::warning file=src/BookingService.cs,line=7,title=Mutation Change not detected::BK-001: EqualityOperator", github);
+        }
+
+        [Fact]
+        public void With_strykers_bail_the_criteria_line_says_what_it_cannot_know()
+        {
+            var model = Model(Report(everyKiller: false));
+            var create = model.MutationOf(model.Requirements.Single(t => t.Requirement.Id == "BK-001"))!;
+
+            Assert.False(create.Exact);
+            Assert.Equal("The tests of AC-2 were never the first to fail with these changes. Stryker stops at the first failing test: " +
+                         "run it with --disable-bail to know whether they detect any.", MutationAnalysis.SilentCriteriaLine(create));
+            Assert.DoesNotContain(new[] { Reports.Markdown(model) }, md => md.Contains("detect none"));
+        }
+
+        [Fact]
+        public void The_version_has_no_commit_suffix()
+        {
+            Assert.Matches(@"^\d+\.\d+\.\d+(-[0-9A-Za-z.]+)?$", Cli.Version);
+            Assert.Equal(0, Cli.Run(new[] { "--version" }));
+        }
+
+        [Theory]
+        [InlineData("report", "--mutations")]
+        [InlineData("lock", "--requirements")]
+        [InlineData("report", "--test-result")]
+        public void Unknown_options_fail_instead_of_being_ignored(string command, string option)
+        {
+            Assert.Equal(2, Cli.Run(new[] { command, "--root", _root, option, "x" }));
         }
 
         [Fact]

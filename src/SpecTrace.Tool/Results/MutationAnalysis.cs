@@ -12,7 +12,11 @@ public sealed record CriterionKills(string CriterionId, int Detected);
 /// Mutation testing seen per requirement: the mutants inside the members with [Implements] for it, how many its tests
 /// detect, and which ones survive.
 /// </summary>
-public sealed record RequirementMutation(IReadOnlyList<Mutant> Mutants, IReadOnlyList<CriterionKills> Criteria, bool HasKillData)
+/// <param name="Exact">
+/// The report lists every test that detects each mutant (Stryker with --disable-bail). Otherwise only the first failing
+/// test is known, and a criterion whose tests are never first may still detect the changes.
+/// </param>
+public sealed record RequirementMutation(IReadOnlyList<Mutant> Mutants, IReadOnlyList<CriterionKills> Criteria, bool HasKillData, bool Exact = false)
 {
     public int Detected => Mutants.Count(m => m.Detected);
     public int Undetected => Mutants.Count(m => m.Undetected);
@@ -49,7 +53,7 @@ public static class MutationAnalysis
             .Select(c => new CriterionKills(c.Id, mutants.Count(m => m.Detected && m.KilledBy.Any(k => c.Tests.Any(t => MutationReport.SameTest(k, t))))))
             .ToList();
 
-        return new RequirementMutation(mutants, criteria, hasKillData);
+        return new RequirementMutation(mutants, criteria, hasKillData, model.Mutations.ListsEveryKiller);
     }
 
     /// <summary>
@@ -75,6 +79,18 @@ public static class MutationAnalysis
         {
             return null;
         }
+    }
+
+    /// <summary>The line about criteria whose tests detect none of the mutants, worded for what the report can tell.</summary>
+    public static string? SilentCriteriaLine(RequirementMutation m)
+    {
+        var silent = m.CriteriaDetectingNothing.ToList();
+        if (silent.Count == 0) return null;
+        var list = string.Join(", ", silent);
+        return m.Exact
+            ? $"The tests of {list} detect none of the changes in this code."
+            : $"The tests of {list} were never the first to fail with these changes. Stryker stops at the first failing test: " +
+              "run it with --disable-bail to know whether they detect any.";
     }
 
     public static string Describe(Mutant m) =>

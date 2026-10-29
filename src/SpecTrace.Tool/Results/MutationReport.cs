@@ -55,6 +55,12 @@ public sealed class MutationReport
 
     public IReadOnlyList<Mutant> Mutants { get; }
 
+    /// <summary>
+    /// Every test that detects a mutant is listed, not only the first one. Stryker stops a mutant's run at the first
+    /// failing test unless it runs with --disable-bail; a mutant killed by two or more tests shows that it did not stop.
+    /// </summary>
+    public bool ListsEveryKiller => Mutants.Any(m => m.KilledBy.Count > 1);
+
     /// <summary>A report file, or the newest mutation-report.json under a folder (StrykerOutput keeps one per run).</summary>
     public static MutationReport Load(string path)
     {

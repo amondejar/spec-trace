@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.7.1-preview.1
+
+### Added
+
+- `dotnet spectrace --version` (also `-v` and `version`).
+- README: the Stryker.NET settings that sharpen the result (`disable-bail`, `ignore-mutations: ["string"]`).
+
+### Changed
+
+- An option a command does not know is now an error with the closest valid option suggested (`--mutations` → "Did
+  you mean --mutation?"), instead of being ignored silently.
+- Per-criterion mutation: Stryker stops at the first failing test unless it runs with `--disable-bail`, so the report
+  only lists one killer per mutant. SpecTrace now tells the two cases apart: with every killer listed it says "the
+  tests of AC-n detect none of the changes"; otherwise "were never the first to fail" and suggests `--disable-bail`
+  (`criteriaExact` in the JSON). Found with the first real Stryker.NET report on room-booking.
+
 ## 0.7.0-preview.1
 
 ### Added

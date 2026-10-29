@@ -14,6 +14,7 @@ internal static class Cli
         SpecTrace: Spec-Driven Development traceability for .NET
 
         Usage: dotnet spectrace <command> [options]
+               dotnet spectrace --version
 
         Commands:
           report          Requirement → code → test matrix.
@@ -92,9 +93,16 @@ internal static class Cli
             return args.Length == 0 ? 1 : 0;
         }
 
+        if (args[0] is "--version" or "-v" or "version")
+        {
+            Console.WriteLine(Version);
+            return 0;
+        }
+
         try
         {
             var opts = Options.Parse(args.Skip(1).ToArray());
+            if (CommandOptions.TryGetValue(args[0], out var allowed)) opts.Check(args[0], allowed);
             var config = SpecTraceConfig.Load(opts.Get("root") ?? Directory.GetCurrentDirectory());
 
             switch (args[0])
@@ -193,6 +201,27 @@ internal static class Cli
             return 2;
         }
     }
+
+    /// <summary>The package version, without the commit the SDK appends ("0.7.1-preview.1+abc123" → "0.7.1-preview.1").</summary>
+    internal static string Version =>
+        (typeof(Cli).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
+         ?? typeof(Cli).Assembly.GetName().Version?.ToString(3) ?? "0.0.0").Split('+')[0];
+
+    /// <summary>The options each command understands; anything else is a typo and fails instead of being ignored.</summary>
+    private static readonly Dictionary<string, string[]> CommandOptions = new()
+    {
+        ["report"] = new[] { "format", "link-base", "out", "fail-on-gaps", "fail-on-drift", "test-results", "fail-on-failing", "base", "mutation", "min-mutation-score" },
+        ["lock"] = new[] { "requirement", "check", "tidy" },
+        ["ids"] = new[] { "fix", "base" },
+        ["impact"] = new[] { "base", "format" },
+        ["context"] = Array.Empty<string>(),
+        ["scaffold-tests"] = new[] { "project", "requirement", "namespace" },
+        ["story"] = new[] { "format" },
+        ["stories"] = new[] { "label", "state", "unspecified", "fail-on-unspecified", "format" },
+        ["mcp"] = Array.Empty<string>(),
+        ["import"] = new[] { "prefix", "out", "status", "dry-run" },
+        ["init"] = new[] { "skills-dir", "here" },
+    };
 
     /// <summary>
     /// IDs used twice after two branches proposed "the next ID" of the same spec. Without --fix it only reports them
@@ -561,6 +590,19 @@ internal static class Cli
         public string? Get(string name) => _named.TryGetValue(name, out var v) ? v : null;
 
         public bool Has(string name) => _named.ContainsKey(name);
+
+        /// <summary>Fails on an option the command does not know, suggesting the closest one (--root is always valid).</summary>
+        public void Check(string command, IReadOnlyCollection<string> allowed)
+        {
+            var known = allowed.Append("root").ToList();
+            foreach (var name in _named.Keys.Where(n => !known.Contains(n, StringComparer.OrdinalIgnoreCase)))
+            {
+                var closest = SpecTrace.Specs.SpecNaming.Closest(known, name, 1).FirstOrDefault();
+                throw new ArgumentException($"Unknown option --{name} for '{command}'." +
+                    (closest != null ? $" Did you mean --{closest}?" : "") +
+                    $" Options: {string.Join(", ", known.Select(k => "--" + k))}.");
+            }
+        }
 
         public static Options Parse(string[] args)
         {
