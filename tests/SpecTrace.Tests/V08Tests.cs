@@ -169,6 +169,7 @@ namespace SpecTrace.Tests
             Assert.Contains("paths: [\"docs/specs/**\"]", yml);
             Assert.Contains("gh workflow run spectrace-implement.yml", yml);
             Assert.Contains("working-directory: .", yml);
+            Assert.Contains("dotnet-version: |\n            8.0.x\n            10.0.x", yml);
             Assert.Contains("claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}", yml);
             Assert.Contains("--disallowedTools \"Bash(dotnet spectrace lock:*)\"", yml);
             Assert.Contains("Bash(git push -u origin ${{ steps.req.outputs.branch }})", yml);
@@ -184,6 +185,20 @@ namespace SpecTrace.Tests
             File.Delete(Path.Combine(_root, ".github", "workflows", AgentWorkflow.FileName));
             Cli.Run(new[] { "init", "--root", _root });
             Assert.False(File.Exists(Path.Combine(_root, ".github", "workflows", AgentWorkflow.FileName)));
+        }
+
+        [Fact]
+        public void The_agent_workflow_uses_the_sdk_of_global_json()
+        {
+            Git("init", "-q", "-b", "main");
+            Write("spectrace.json", "{ \"specs\": \"specs\", \"sources\": [\"src\"] }");
+            Write("global.json", "{ \"sdk\": { \"version\": \"10.0.100\" } }");
+
+            Cli.Run(new[] { "init", "--agent", "--root", _root });
+
+            var yml = File.ReadAllText(Path.Combine(_root, ".github", "workflows", AgentWorkflow.FileName));
+            Assert.Equal(3, yml.Split("global-json-file: global.json").Length - 1);
+            Assert.DoesNotContain("dotnet-version", yml);
         }
 
         [Fact]

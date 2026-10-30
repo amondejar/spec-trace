@@ -111,7 +111,7 @@ public static class SpecTracePrompts
            not commit or open pull requests unless the person asks.
 
         Finish with: the requirement IDs and files, which criteria came from the story and which from existing rules,
-        and the open questions.
+        and the open questions. End by telling the person that `dotnet spectrace next` shows the next step.
         """;
 
     private static string ReviewSpec(string target) => $"""

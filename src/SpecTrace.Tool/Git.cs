@@ -111,6 +111,30 @@ public sealed class Git
         return result;
     }
 
+    /// <summary>Runs any git command in the repository: exit code and output (stdout and stderr).</summary>
+    public (int Code, string Output) Command(params string[] args) => TryRun(args);
+
+    /// <summary>Changed and untracked files (paths relative to the top level), from git status.</summary>
+    public IReadOnlyList<string> DirtyFiles() =>
+        Run("status", "--porcelain", "--untracked-files=all").Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .Select(l => l.Length > 3 ? l.Substring(3).Trim().Trim('"') : l.Trim())
+            .Select(p => p.Contains(" -> ", StringComparison.Ordinal) ? p.Substring(p.IndexOf(" -> ", StringComparison.Ordinal) + 4) : p)
+            .ToList();
+
+    /// <summary>The upstream of the current branch ("origin/spec/gh-2-x"), or null if it has none.</summary>
+    public string? Upstream()
+    {
+        var (code, output) = TryRun("rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}");
+        return code == 0 && output.Trim().Length > 0 ? output.Trim() : null;
+    }
+
+    /// <summary>Commits in <paramref name="from"/> that <paramref name="to"/> does not have.</summary>
+    public int Count(string from, string to)
+    {
+        var (code, output) = TryRun("rev-list", "--count", $"{to}..{from}");
+        return code == 0 && int.TryParse(output.Trim(), out var n) ? n : 0;
+    }
+
     private string Run(params string[] args)
     {
         var (code, output) = TryRun(args);

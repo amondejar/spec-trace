@@ -72,7 +72,7 @@ jobs:
           fetch-depth: 0 # pending --since compares with the base branch
       - uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: 8.0.x
+          {{dotnet}}
       - run: dotnet tool restore
 
       - name: Requirements this pull request approved
@@ -170,7 +170,7 @@ jobs:
           fetch-depth: 0 # pending --since compares with the commit before the push
       - uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: 8.0.x
+          {{dotnet}}
       - run: dotnet tool restore
       - name: Start one run per approved requirement waiting for work
         env:
@@ -207,7 +207,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: 8.0.x
+          {{dotnet}}
       - run: dotnet tool restore
 
       - name: Requirement and branch

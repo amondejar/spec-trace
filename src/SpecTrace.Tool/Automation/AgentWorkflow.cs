@@ -16,10 +16,13 @@ public static class AgentWorkflow
     public const string Label = "spectrace:implement";
 
     /// <summary>Fills the template: the branch specs are merged into and the specs folder, relative to the repository.</summary>
-    public static string Render(string template, string specs, string branch, string repositoryPrefix = "")
+    public static string Render(string template, string specs, string branch, string repositoryPrefix = "", bool hasGlobalJson = false)
     {
         var folder = (repositoryPrefix + specs.Replace('\\', '/')).Trim('/');
+        // The SDK the repository pins (global.json at its root); otherwise the current LTS SDKs, whose runtimes run the tests.
+        var dotnet = hasGlobalJson ? "global-json-file: global.json" : "dotnet-version: |\n            8.0.x\n            10.0.x";
         return template
+            .Replace("{{dotnet}}", dotnet)
             .Replace("{{branch}}", branch)
             .Replace("{{specs}}", folder.Length == 0 ? "." : folder)
             .Replace("{{workflow}}", FileName)

@@ -17,6 +17,18 @@ internal static class Cli
         Usage: dotnet spectrace <command> [options]
                dotnet spectrace --version
 
+        A user story, step by step (each command says what comes next):
+          next            Where the story of this branch is and the command for the next step. Run it whenever in doubt.
+                            --story <ref>      another story than the branch's
+          start <story>   Creates the story's branch (spec/gh-<n>-<title>) from the default branch, or switches to it.
+          approve         Approves every proposed requirement of the story at once; refuses while open questions remain.
+                            --story <ref>      another story than the branch's
+                            --force            approve even with open questions
+          submit          Commits the specs, pushes the branch, opens the pull request and adds the label that starts the
+                          agent (needs the GitHub CLI, gh; without it, says what to do on github.com).
+          accept          After reviewing the agent's work: records the review of the whole story (spectrace.lock),
+                          commits and pushes it. Refuses while a requirement is missing code or tests.
+
         Commands:
           report          Requirement → code → test matrix.
                             --format md|json|github
@@ -158,6 +170,28 @@ internal static class Cli
                     return 0;
                 }
 
+                case "next":
+                {
+                    var ctx = new SpecTrace.Tool.Flow.FlowContext(config, Console.Out);
+                    Console.WriteLine(SpecTrace.Tool.Flow.StoryFlow.Render(SpecTrace.Tool.Flow.StoryFlow.Next(ctx, opts.Get("story"))));
+                    return 0;
+                }
+
+                case "start":
+                {
+                    var story = opts.Positional.FirstOrDefault() ?? throw new ArgumentException("Which story? dotnet spectrace start #12");
+                    return SpecTrace.Tool.Flow.StoryFlow.Start(new SpecTrace.Tool.Flow.FlowContext(config, Console.Out), story);
+                }
+
+                case "approve":
+                    return SpecTrace.Tool.Flow.StoryFlow.Approve(new SpecTrace.Tool.Flow.FlowContext(config, Console.Out), opts.Get("story"), opts.Has("force"));
+
+                case "submit":
+                    return SpecTrace.Tool.Flow.StoryFlow.Submit(new SpecTrace.Tool.Flow.FlowContext(config, Console.Out));
+
+                case "accept":
+                    return SpecTrace.Tool.Flow.StoryFlow.Accept(new SpecTrace.Tool.Flow.FlowContext(config, Console.Out));
+
                 case "pending":
                 {
                     var model = TraceScanner.Scan(config);
@@ -295,6 +329,11 @@ internal static class Cli
         ["context"] = Array.Empty<string>(),
         ["architecture"] = new[] { "format" },
         ["pending"] = new[] { "since", "requirement", "format" },
+        ["next"] = new[] { "story" },
+        ["start"] = Array.Empty<string>(),
+        ["approve"] = new[] { "story", "force" },
+        ["submit"] = Array.Empty<string>(),
+        ["accept"] = Array.Empty<string>(),
         ["prompt"] = Array.Empty<string>(),
         ["scaffold-tests"] = new[] { "project", "requirement", "namespace" },
         ["story"] = new[] { "format" },
@@ -463,7 +502,7 @@ internal static class Cli
             }
 
             Create(workflow, AgentWorkflow.Render(Template(AgentWorkflow.FileName), SpecTraceConfig.Load(root).Specs, AgentWorkflow.DefaultBranch(root),
-                Git.Open(root)?.Prefix ?? ""));
+                Git.Open(root)?.Prefix ?? "", File.Exists(Path.Combine(Git.Open(root)?.TopLevel ?? root, "global.json"))));
         }
 
         Console.WriteLine(created.Count == 0 ? "Everything already exists." : "Created:\n" + string.Join("\n", created.Select(c => "  " + c)));

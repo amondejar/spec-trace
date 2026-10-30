@@ -59,7 +59,26 @@ the closest valid one suggested.
 | --- | --- |
 | `SpecTrace` | Roslyn analyzer + source generator, IDE code fixes and MSBuild props/targets. Brings in `SpecTrace.Abstractions`. |
 | `SpecTrace.Abstractions` | The `[Implements]` and `[Verifies]` attributes. |
-| `SpecTrace.Tool` | The `dotnet spectrace` CLI: `report`, `pending`, `impact`, `context`, `architecture`, `prompt`, `lock`, `ids`, `scaffold-tests`, `story`, `stories`, `import`, `mcp`, `init`. |
+| `SpecTrace.Tool` | The `dotnet spectrace` CLI: `next`, `start`, `approve`, `submit`, `accept`, `report`, `pending`, `impact`, `context`, `architecture`, `prompt`, `lock`, `ids`, `scaffold-tests`, `story`, `stories`, `import`, `mcp`, `init`. |
+
+## The story flow
+
+A user story goes from the issue to the merge in six steps, with one command for each human moment. When in doubt,
+`dotnet spectrace next` says where the story is and what to run:
+
+```text
+$ dotnet spectrace next
+Story #2 · branch spec/gh-2-alta-de-clientes
+  CLI-001 Alta de un cliente: approved · missing implementation, tests
+  CLI-002 Email obligatorio: approved · missing implementation, tests
+
+Step 4 of 6: Send it to the agent
+The story is approved and nothing implements it yet. Commit and push the specs, open the pull request and start the agent:
+  dotnet spectrace submit
+```
+
+`start #12` → `/mcp__spectrace__story_to_spec #12` → `approve` → `submit` → `accept` → merge.
+See [docs/flow.md](https://github.com/amondejar/spec-trace/blob/main/docs/flow.md).
 
 ## Getting started
 
@@ -226,7 +245,7 @@ jobs:
         with:
           dotnet-version: 8.0.x
       - run: dotnet test --logger trx --results-directory TestResults
-      - uses: amondejar/spec-trace@v0.9.0
+      - uses: amondejar/spec-trace@v0.10.0
         if: always()                 # also when tests fail: the report says which criteria broke
         with:
           root: .                    # folder containing spectrace.json

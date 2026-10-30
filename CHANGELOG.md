@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.10.0-preview.1
+
+### Added
+
+- **The story flow**: one command per human moment, and one to know where you are.
+  - `dotnet spectrace next`: the step (1–6) the story of the branch is in, its requirements, and the exact command
+    for the next step. Detects the agent's commits on GitHub and a merged branch, with or without the GitHub CLI.
+  - `start #N`: the story's branch (`spec/gh-<n>-<title>`) from the default branch, or switches to it.
+  - `approve`: approves every proposed requirement of the story at once; refuses while open questions remain.
+  - `submit`: commits the specs, pushes, opens the pull request (`Closes #N`) and adds `spectrace:implement` (GitHub
+    CLI); refuses when the branch's pull request is already merged.
+  - `accept`: pulls, checks that the whole story has code and tests, records the review in `spectrace.lock`, commits
+    and pushes it.
+- `docs/flow.md`: the six steps on one page.
+
+### Changed
+
+- The agent workflow (`init --agent`) installs the SDK of `global.json` when the repository has one, and .NET 8 and 10
+  otherwise (it was fixed to .NET 8).
+- The `story_to_spec` prompt ends by pointing at `dotnet spectrace next`.
+
 ## 0.9.0-preview.1
 
 ### Added
