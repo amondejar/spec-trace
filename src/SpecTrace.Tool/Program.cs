@@ -415,6 +415,11 @@ internal static class Cli
         if (opts.Has("agent"))
         {
             var workflow = Path.Combine(".github", "workflows", AgentWorkflow.FileName);
+            if (File.Exists(Path.Combine(root, workflow)))
+            {
+                Console.WriteLine($"{workflow.Replace('\\', '/')} already exists and was not changed: delete it and run `dotnet spectrace init --agent` again for this version's template.");
+            }
+
             Create(workflow, AgentWorkflow.Render(Template(AgentWorkflow.FileName), SpecTraceConfig.Load(root).Specs, AgentWorkflow.DefaultBranch(root),
                 Git.Open(root)?.Prefix ?? ""));
         }

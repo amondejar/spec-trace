@@ -173,10 +173,27 @@ namespace SpecTrace.Tests
             Assert.Contains("--disallowedTools \"Bash(dotnet spectrace lock:*)\"", yml);
             Assert.Contains("Bash(git push -u origin ${{ steps.req.outputs.branch }})", yml);
             Assert.Contains("dotnet spectrace prompt implement_requirement \"$id\"", yml);
+            // v0.8.1: the agent works on the spec pull request when it gets the label.
+            Assert.Contains("types: [labeled]", yml);
+            Assert.Contains("github.event.label.name == 'spectrace:implement'", yml);
+            Assert.Contains("github.event.pull_request.head.repo.full_name == github.repository", yml);
+            Assert.Contains("pending --since \"origin/$BASE_REF\"", yml);
+            Assert.Contains("Bash(git push origin HEAD:${{ steps.req.outputs.branch }})", yml);
+            Assert.Contains("gh pr edit \"$PR\" --remove-label \"spectrace:implement\"", yml);
             // Without --agent nothing is written.
             File.Delete(Path.Combine(_root, ".github", "workflows", AgentWorkflow.FileName));
             Cli.Run(new[] { "init", "--root", _root });
             Assert.False(File.Exists(Path.Combine(_root, ".github", "workflows", AgentWorkflow.FileName)));
+        }
+
+        [Fact]
+        public void Init_agent_does_not_overwrite_an_existing_workflow()
+        {
+            Write(".github/workflows/" + AgentWorkflow.FileName, "name: mine\n");
+
+            Assert.Equal(0, Cli.Run(new[] { "init", "--agent", "--root", _root }));
+
+            Assert.Equal("name: mine\n", File.ReadAllText(Path.Combine(_root, ".github", "workflows", AgentWorkflow.FileName)));
         }
 
         [Fact]

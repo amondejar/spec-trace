@@ -12,6 +12,9 @@ public static class AgentWorkflow
 {
     public const string FileName = "spectrace-implement.yml";
 
+    /// <summary>The pull request label that asks the agent to implement what the pull request approved.</summary>
+    public const string Label = "spectrace:implement";
+
     /// <summary>Fills the template: the branch specs are merged into and the specs folder, relative to the repository.</summary>
     public static string Render(string template, string specs, string branch, string repositoryPrefix = "")
     {
@@ -20,6 +23,7 @@ public static class AgentWorkflow
             .Replace("{{branch}}", branch)
             .Replace("{{specs}}", folder.Length == 0 ? "." : folder)
             .Replace("{{workflow}}", FileName)
+            .Replace("{{label}}", Label)
             .Replace("{{workdir}}", repositoryPrefix.Trim('/').Length == 0 ? "." : repositoryPrefix.Trim('/'));
     }
 
@@ -43,7 +47,7 @@ public static class AgentWorkflow
         yield return $"Agent workflow (.github/workflows/{FileName}): before it runs, on GitHub:";
         yield return "  1. Install the Claude GitHub App on the repository: https://github.com/apps/claude";
         yield return "  2. Run `claude setup-token` and save the token as the Actions secret CLAUDE_CODE_OAUTH_TOKEN";
-        yield return "     (or an API key as ANTHROPIC_API_KEY: swap the two \"auth\" lines in the workflow).";
+        yield return "     (or an API key as ANTHROPIC_API_KEY: swap the \"auth\" lines in the workflow).";
         yield return "     Do not paste the token anywhere else, and never into a file of the repository.";
         if (!File.Exists(Path.Combine(root, ".config", "dotnet-tools.json")))
         {
@@ -51,6 +55,8 @@ public static class AgentWorkflow
             yield return "     dotnet new tool-manifest && dotnet tool install SpecTrace.Tool --prerelease";
         }
 
-        yield return "Then merge a spec that approves a requirement, or start it by hand: Actions → SpecTrace implement → Run workflow.";
+        yield return $"  {(File.Exists(Path.Combine(root, ".config", "dotnet-tools.json")) ? 3 : 4)}. Create the label \"{Label}\" (Issues → Labels), or: gh label create \"{Label}\"";
+        yield return $"Then, on a spec pull request that approves a requirement, add the label \"{Label}\": the agent pushes the";
+        yield return "code and tests to that same pull request. Or start it by hand: Actions → SpecTrace implement → Run workflow.";
     }
 }

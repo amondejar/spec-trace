@@ -1,29 +1,38 @@
-# SpecTrace: an agent implements each approved requirement and opens a pull request for a person to review.
+# SpecTrace: an agent implements approved requirements, and a person reviews the result.
 # Created by `dotnet spectrace init --agent`; it is yours to adapt.
 #
-#   1. A spec pull request approves a requirement (Status: approved) and is merged into {{branch}}.
-#   2. The "queue" job finds the approved requirements that changed in that push and still lack code or tests
-#      (dotnet spectrace pending --since) and starts one "implement" run for each.
-#   3. The "implement" job runs Claude Code with the SpecTrace MCP server: it implements the requirement, writes one
-#      test per acceptance criterion, pushes the branch spectrace/implement-<ID> and opens a pull request.
-#   4. Your CI checks that pull request like any other (gaps, drift, tests). A person reviews it and, once satisfied,
-#      records the review with `dotnet spectrace lock --requirement <ID>`. The agent never does that.
+# Recommended: on the spec pull request itself.
+#   1. A spec pull request approves a requirement (Status: approved). Its CI fails with ST0003: nothing implements it.
+#   2. Add the label "{{label}}" to the pull request.
+#   3. The "implement-pr" job runs Claude Code with the SpecTrace MCP server on that branch: it implements the
+#      requirements the pull request approved or extended (dotnet spectrace pending --since <base>), writes one test
+#      per acceptance criterion, pushes the commits to the same pull request and comments what it did.
+#   4. CI runs again. A person reviews spec, code and tests together, records the review with
+#      `dotnet spectrace lock --requirement <ID>` (the agent never does that) and merges once: {{branch}} stays green.
 #
-# You can also start it by hand: Actions → SpecTrace implement → Run workflow, with a requirement ID.
+# Also available:
+#   - By hand: Actions → SpecTrace implement → Run workflow, with a requirement ID. It works on a new branch
+#     spectrace/implement-<ID> created from the branch you pick, and opens a pull request.
+#   - After a merge: a push to {{branch}} that approves requirements still missing code or tests starts one run per
+#     requirement ("queue" job), for repositories whose CI lets an approved requirement reach {{branch}} unimplemented.
 #
 # Needs:
 #   - The Claude GitHub App on this repository (https://github.com/apps/claude, or /install-github-app in Claude Code).
-#     Its token pushes the agent's branch, so your CI runs on the pull request: GitHub does not start workflows for
-#     pushes made with the default GITHUB_TOKEN.
+#     Its token pushes the agent's commits, so your CI runs on them: GitHub does not start workflows for pushes made
+#     with the default GITHUB_TOKEN.
 #   - The secret CLAUDE_CODE_OAUTH_TOKEN: run `claude setup-token` (Claude Pro or Max) and save the token under
 #     Settings → Secrets and variables → Actions. With an API key from the Claude Console instead, save it as
-#     ANTHROPIC_API_KEY and swap the two lines marked "auth" below. Never write the token in a file of the repository.
+#     ANTHROPIC_API_KEY and swap the lines marked "auth" below. Never write the token in a file of the repository.
+#   - The label "{{label}}" (Issues → Labels → New label). Only people with write access can add labels; pull requests
+#     from forks get no secrets and are skipped.
 #   - SpecTrace.Tool in .config/dotnet-tools.json and the spectrace server in .mcp.json (dotnet spectrace init).
 #   - Recommended: protect {{branch}} (Settings → Branches) so that only reviewed pull requests reach it.
 
 name: SpecTrace implement
 
 on:
+  pull_request:
+    types: [labeled]
   push:
     branches: [{{branch}}]
     paths: ["{{specs}}/**"]
@@ -39,10 +48,116 @@ defaults:
     working-directory: {{workdir}} # where spectrace.json is
 
 concurrency:
-  group: spectrace-implement-${{ inputs.requirement || github.sha }}
+  group: spectrace-implement-${{ github.event.pull_request.number || inputs.requirement || github.sha }}
   cancel-in-progress: false
 
 jobs:
+  implement-pr:
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.label.name == '{{label}}' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write # the Claude GitHub App token
+      actions: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0 # pending --since compares with the base branch
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 8.0.x
+      - run: dotnet tool restore
+
+      - name: Requirements this pull request approved
+        id: req
+        env:
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          # The branch name goes into the agent's allowed commands: only plain names.
+          if ! printf '%s' "$HEAD_REF" | grep -Eq '^[A-Za-z0-9._/-]+$'; then
+            echo "::error::The branch name '$HEAD_REF' has characters this workflow does not accept."
+            exit 1
+          fi
+          dotnet spectrace pending --since "origin/$BASE_REF"
+          dotnet spectrace pending --since "origin/$BASE_REF" --format ids > pending.txt
+          if [ ! -s pending.txt ]; then
+            echo "Pull request #$PR approves no requirement that is missing code or tests: nothing to do." | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          ids=$(paste -sd ' ' pending.txt)
+          {
+            echo "ids=$ids"
+            echo "branch=$HEAD_REF"
+            echo "head=$(git rev-parse HEAD)"
+            echo "prompt<<SPECTRACE_PROMPT_END"
+            while read -r id; do
+              dotnet spectrace prompt implement_requirement "$id"
+              echo
+            done < pending.txt
+            echo "SPECTRACE_PROMPT_END"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Implement with Claude Code
+        if: steps.req.outputs.skip != 'true'
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }} # auth: Claude Pro or Max
+          # anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}         # auth: Claude Console API key
+          prompt: |
+            Pull request #${{ github.event.pull_request.number }} approves these requirements: ${{ steps.req.outputs.ids }}.
+            Implement them one after the other, following these instructions for each:
+
+            ${{ steps.req.outputs.prompt }}
+
+            You are running unattended in GitHub Actions: nobody can answer questions during this run.
+            - You are on the branch ${{ steps.req.outputs.branch }} of that pull request. Do not switch branches and do
+              not change the specs.
+            - Run `dotnet build` and `dotnet test` until both pass and `dotnet spectrace pending --requirement <ID>`
+              no longer lists any of them.
+            - Commit with messages that start with the requirement ID, then run
+              `git push origin HEAD:${{ steps.req.outputs.branch }}`. Do not open another pull request.
+            - Finish with `gh pr comment ${{ github.event.pull_request.number }} --body-file <file>`: what you changed, a
+              table with each acceptance criterion and the test that covers it, anything the reviewer should look at,
+              and the line "After reviewing, record it with: dotnet spectrace lock --requirement <ID>".
+            - If a spec is ambiguous, contradicts the code, or cannot be implemented as written, do not guess: leave
+              that requirement out, and list the questions in that comment.
+          claude_args: |
+            --max-turns 100
+            --allowedTools "mcp__spectrace,Read,Edit,Write,Glob,Grep,Bash(dotnet build:*),Bash(dotnet test:*),Bash(dotnet restore:*),Bash(dotnet spectrace pending:*),Bash(dotnet spectrace report:*),Bash(dotnet spectrace context:*),Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git add:*),Bash(git commit:*),Bash(git push origin HEAD:${{ steps.req.outputs.branch }}),Bash(gh pr comment:*)"
+            --disallowedTools "Bash(dotnet spectrace lock:*)"
+
+      - name: Result
+        if: always() && steps.req.outputs.skip != 'true' && steps.req.outputs.branch != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ steps.req.outputs.branch }}
+          BEFORE: ${{ steps.req.outputs.head }}
+          IDS: ${{ steps.req.outputs.ids }}
+        run: |
+          after=$(git ls-remote origin "refs/heads/$BRANCH" | cut -f1)
+          if [ -n "$after" ] && [ "$after" != "$BEFORE" ]; then
+            echo "$IDS: the agent pushed its work to $BRANCH ($(git rev-list --count "$BEFORE..$after" 2>/dev/null || echo new) commit(s)); see its comment on the pull request." | tee -a "$GITHUB_STEP_SUMMARY"
+          else
+            echo "$IDS: the agent pushed nothing; its comment on the pull request says why." | tee -a "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Remove the label, so adding it again starts another run
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: gh pr edit "$PR" --remove-label "{{label}}" || true
+
   queue:
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
@@ -137,7 +252,7 @@ jobs:
             ${{ steps.req.outputs.prompt }}
 
             You are running unattended in GitHub Actions: nobody can answer questions during this run.
-            - You are on the branch ${{ steps.req.outputs.branch }}, created from {{branch}}. Do not switch branches.
+            - You are on the branch ${{ steps.req.outputs.branch }}, created from ${{ github.ref_name }}. Do not switch branches.
             - Run `dotnet build` and `dotnet test` until both pass and `dotnet spectrace pending --requirement ${{ steps.req.outputs.id }}`
               no longer lists it.
             - Then commit with a message that starts with "${{ steps.req.outputs.id }}: ", run

@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.8.1-preview.1
+
+### Added
+
+- The agent workflow works on the spec pull request itself: add the label `spectrace:implement` and the agent
+  implements the requirements that pull request approved or extended, pushes to the same branch and comments what it
+  did (each criterion and its test) or its questions. Spec, code and tests are reviewed and merged together, so the
+  default branch never gets an approved requirement without code (ST0003). Same-repository pull requests only; the
+  label is removed at the end so it can be added again.
+- Runs started by hand work from the branch picked in "Use workflow from".
+
+### Changed
+
+- `init --agent` says when the workflow already exists instead of skipping it silently (delete it to regenerate).
+
 ## 0.8.0-preview.1
 
 ### Added

@@ -182,7 +182,7 @@ jobs:
         with:
           dotnet-version: 8.0.x
       - run: dotnet test --logger trx --results-directory TestResults
-      - uses: amondejar/spec-trace@v0.8.0
+      - uses: amondejar/spec-trace@v0.8.1
         if: always()                 # also when tests fail: the report says which criteria broke
         with:
           root: .                    # folder containing spectrace.json
@@ -333,27 +333,35 @@ that prefer revision 2026-07-28 fall back to it automatically.
 and approve specs and review pull requests, and an agent does the work in between.
 
 ```text
-spec PR approved and merged ──▶ queue job: dotnet spectrace pending --since <commit before the push>
-                                   │ one run per approved requirement that still lacks code or tests
-                                   ▼
-                                implement job: Claude Code GitHub Action + SpecTrace MCP server
-                                   │ implement_requirement prompt, dotnet build / dotnet test until clean
-                                   ▼
-                                branch spectrace/implement-<ID> + pull request ──▶ your CI ──▶ a person reviews,
-                                (or an issue with questions if the spec is unclear)          runs spectrace lock, merges
+spec PR approves BK-008 ──▶ CI red (ST0003: nothing implements it)
+   │ a person adds the label "spectrace:implement"
+   ▼
+implement-pr job: dotnet spectrace pending --since origin/<base>   (what this PR approved or extended)
+   │ Claude Code GitHub Action + SpecTrace MCP server, implement_requirement prompt,
+   │ dotnet build / dotnet test until clean
+   ▼
+commits pushed to the same PR + a comment (criterion → test) ──▶ CI green ──▶ a person reviews spec, code and tests,
+(or a comment with questions if the spec is unclear)                      runs spectrace lock, merges once
 ```
 
-- **Triggers:** a push to the default branch that touches the specs (only the requirements that push approved or
-  extended, so old gaps do not start runs), or by hand from Actions → SpecTrace implement → Run workflow with an ID.
+- **On the spec pull request (recommended):** add the label `spectrace:implement`. The agent implements what the
+  pull request approved or extended and pushes to the same branch, so the default branch never gets an approved
+  requirement without code. The label is removed at the end; add it again to start another run. Only people with
+  write access can add labels, and pull requests from forks are skipped.
+- **By hand:** Actions → SpecTrace implement → Run workflow with an ID; it works on a new branch
+  `spectrace/implement-<ID>` from the branch you pick and opens a pull request (or an issue with questions).
+- **After a merge:** a push to the default branch that approves requirements still missing code or tests starts one
+  run per requirement, for repositories whose CI lets that happen.
 - **Authentication:** the secret `CLAUDE_CODE_OAUTH_TOKEN` (`claude setup-token`, Claude Pro or Max) or
-  `ANTHROPIC_API_KEY` (Claude Console; swap the two lines marked `auth`). Never commit a token to the repository.
+  `ANTHROPIC_API_KEY` (Claude Console; swap the lines marked `auth`). Never commit a token to the repository.
 - **Claude GitHub App:** install it on the repository (<https://github.com/apps/claude>). The agent pushes with its
-  token, so your CI runs on the pull request; GitHub does not start workflows for pushes made with `GITHUB_TOKEN`.
-- **Guardrails:** the agent gets the SpecTrace tools, file edits, `dotnet build`/`test`, `git add`/`commit`, a push of
-  its own branch only, `gh pr create` and `gh issue create`; `dotnet spectrace lock` is denied, so recording the
-  review stays with a person. One branch per requirement (an existing branch is never overwritten), 80 turns and a
-  60-minute timeout. If the spec is ambiguous it opens an issue with its questions instead of guessing.
+  token, so your CI runs on its commits; GitHub does not start workflows for pushes made with `GITHUB_TOKEN`.
+- **Guardrails:** the agent gets the SpecTrace tools, file edits, `dotnet build`/`test`, `git add`/`commit`, a push to
+  its one branch only, and `gh pr comment` (or `gh pr create` / `gh issue create` when started by hand);
+  `dotnet spectrace lock` is denied, so recording the review stays with a person. A turn limit and a 60-minute
+  timeout; branch names with unusual characters are refused. If a spec is ambiguous it asks instead of guessing.
 - Protect the default branch so that only reviewed pull requests reach it.
+- `init --agent` never overwrites an existing workflow: delete it and run it again to get a newer template.
 
 The two commands it relies on work anywhere:
 
