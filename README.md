@@ -245,7 +245,7 @@ jobs:
         with:
           dotnet-version: 8.0.x
       - run: dotnet test --logger trx --results-directory TestResults
-      - uses: amondejar/spec-trace@v0.10.0
+      - uses: amondejar/spec-trace@v0.10.1
         if: always()                 # also when tests fail: the report says which criteria broke
         with:
           root: .                    # folder containing spectrace.json

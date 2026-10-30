@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.10.1-preview.1
+
+### Fixed
+
+- `submit` could not find the pull request it had just created ("created but gh cannot find it") and did not add the
+  label: GitHub's search lags behind a new pull request. It now reads the number from what `gh pr create` prints, and
+  looks pull requests up with `gh pr view <branch>` (the search is only the fallback).
+- `next` said "Done" for a merged story with a requirement whose review was never recorded. It now says which ones,
+  with the commands to record the review through a small pull request.
+
 ## 0.10.0-preview.1
 
 ### Added

@@ -32,34 +32,45 @@ public sealed class GitHubCli
     /// <summary>gh is installed and logged in.</summary>
     public bool Available => _available ??= _run(new[] { "auth", "status" }).Code == 0;
 
-    /// <summary>The pull request of a branch (the newest one, open or not), or null.</summary>
+    /// <summary>
+    /// The pull request of a branch (open first, else the newest merged or closed one), or null. `gh pr view` reads it
+    /// directly; `gh pr list` (a search) is only the fallback, since a pull request created seconds ago may not be in it yet.
+    /// </summary>
     public PullRequest? ForBranch(string branch)
     {
-        var (code, output) = _run(new[] { "pr", "list", "--head", branch, "--state", "all", "--limit", "1", "--json", "number,url,state,labels" });
-        if (code != 0) return null;
-        try
-        {
-            using var doc = JsonDocument.Parse(output);
-            var pr = doc.RootElement.EnumerateArray().FirstOrDefault();
-            if (pr.ValueKind != JsonValueKind.Object) return null;
-            var labels = pr.TryGetProperty("labels", out var l) && l.ValueKind == JsonValueKind.Array
-                ? l.EnumerateArray().Select(x => x.TryGetProperty("name", out var n) ? n.GetString() ?? "" : "").Where(n => n.Length > 0).ToList()
-                : new List<string>();
-            return new PullRequest(pr.GetProperty("number").GetInt32(), pr.GetProperty("url").GetString() ?? "",
-                pr.GetProperty("state").GetString() ?? "", labels);
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
+        var (code, output) = _run(new[] { "pr", "view", branch, "--json", "number,url,state,labels" });
+        if (code == 0 && Parse(output) is { } viewed) return viewed;
+        (code, output) = _run(new[] { "pr", "list", "--head", branch, "--state", "all", "--limit", "1", "--json", "number,url,state,labels" });
+        return code == 0 ? Parse(output) : null;
     }
 
-    /// <summary>Opens a pull request from <paramref name="branch"/> and returns it.</summary>
+    /// <summary>Opens a pull request from <paramref name="branch"/> and returns it (from the URL gh prints).</summary>
     public PullRequest Create(string branch, string baseBranch, string title, string body)
     {
         var (code, output) = _run(new[] { "pr", "create", "--head", branch, "--base", baseBranch, "--title", title, "--body", body });
         if (code != 0) throw new InvalidOperationException("gh pr create failed: " + output.Trim());
+        var url = System.Text.RegularExpressions.Regex.Match(output, @"https?://\S+/pull/(?<n>\d+)");
+        if (url.Success) return new PullRequest(int.Parse(url.Groups["n"].Value, System.Globalization.CultureInfo.InvariantCulture), url.Value, "OPEN", new List<string>());
         return ForBranch(branch) ?? throw new InvalidOperationException("The pull request was created but gh cannot find it: " + output.Trim());
+    }
+
+    /// <summary>One pull request object, or the first of an array.</summary>
+    private static PullRequest? Parse(string json)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            var pr = doc.RootElement.ValueKind == JsonValueKind.Array ? doc.RootElement.EnumerateArray().FirstOrDefault() : doc.RootElement;
+            if (pr.ValueKind != JsonValueKind.Object || !pr.TryGetProperty("number", out var number)) return null;
+            var labels = pr.TryGetProperty("labels", out var l) && l.ValueKind == JsonValueKind.Array
+                ? l.EnumerateArray().Select(x => x.TryGetProperty("name", out var n) ? n.GetString() ?? "" : "").Where(n => n.Length > 0).ToList()
+                : new List<string>();
+            return new PullRequest(number.GetInt32(), pr.GetProperty("url").GetString() ?? "", pr.GetProperty("state").GetString() ?? "", labels);
+        }
+        catch (Exception ex) when (ex is JsonException or InvalidOperationException or KeyNotFoundException)
+        {
+            return null;
+        }
     }
 
     public void AddLabel(int number, string label)

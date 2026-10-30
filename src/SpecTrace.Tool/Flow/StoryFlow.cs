@@ -166,6 +166,20 @@ public static class StoryFlow
                      git.Command("merge-base", "--is-ancestor", "HEAD", "origin/" + ctx.DefaultBranch).Code == 0;
         if (pr is { IsMerged: true } || (pr == null && inMain))
         {
+            var unreviewed = reqs.Where(t => t.Requirement.IsEnforced && !IsReviewed(t)).Select(t => t.Requirement.Id).ToList();
+            if (unreviewed.Count > 0)
+            {
+                return new NextStep(6, "Merged without a review", facts,
+                    $"The pull request is merged, but {string.Join(", ", unreviewed)} has no recorded review (spectrace.lock). Review it and " +
+                    $"record it through a small pull request from {ctx.DefaultBranch}:",
+                    new[]
+                    {
+                        $"git checkout {ctx.DefaultBranch}", "git pull", $"git checkout -b chore/review-{Number(story)}",
+                        "dotnet spectrace lock " + string.Join(" ", unreviewed.Select(id => "--requirement " + id)),
+                        "git commit -am \"" + story.Display + ": reviewed\"", "git push -u origin HEAD",
+                    });
+            }
+
             return new NextStep(6, "Done", facts, $"The pull request of this branch is merged. Go back to {ctx.DefaultBranch} for the next story:",
                 new[] { $"git checkout {ctx.DefaultBranch}", "git pull", "dotnet spectrace next" });
         }

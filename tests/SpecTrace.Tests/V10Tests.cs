@@ -185,6 +185,27 @@ If the email is missing, then the system shall reject the registration.
         }
 
         [Fact]
+        public void A_story_merged_without_its_review_is_not_done()
+        {
+            StoryFlow.Start(Ctx(), "#2");
+            Write("specs/clientes.spec.md", Spec.Replace("> Open questions:\n> - ¿Se valida la letra del DNI?\n", "")
+                .Replace("Status: proposed", "Status: approved"));
+            Write("src/Clientes.cs", "public class Clientes\n{\n    [Implements(Requirements.CLI_001)] public void Alta() { }\n    [Implements(Requirements.CLI_002)] public void Email() { }\n}\n");
+            Write("tests/ClientesTests.cs", "public class T\n{\n    [Fact, Verifies(Requirements.CLI_001, AcceptanceCriteria.CLI_001.AC_1)] public void A() { }\n" +
+                                            "    [Fact, Verifies(Requirements.CLI_002, AcceptanceCriteria.CLI_002.AC_1)] public void B() { }\n}\n");
+            Git(Work, "add", "-A");
+            Git(Work, "commit", "-q", "-m", "all");
+            Git(Work, "push", "-q", "-u", "origin", "spec/gh-2-alta-de-clientes");
+            _gh.Prs.Add(new FakePr(4, "spec/gh-2-alta-de-clientes", "main", "", "") { State = "MERGED" });
+
+            var step = Next();
+
+            Assert.Equal("Merged without a review", step.Title);
+            Assert.Contains("CLI-001, CLI-002", step.Do);
+            Assert.Contains("dotnet spectrace lock --requirement CLI-001 --requirement CLI-002", step.Commands);
+        }
+
+        [Fact]
         public void Submit_refuses_when_the_pull_request_of_the_branch_is_already_merged()
         {
             StoryFlow.Start(Ctx(), "#2");
@@ -318,6 +339,12 @@ If the email is missing, then the system shall reject the registration.
         private sealed class FakeGh
         {
             public bool LoggedIn { get; set; } = true;
+            public bool SearchLags { get; set; } = true;
+
+            private static string Json(FakePr pr) => JsonSerializer.Serialize(new
+            {
+                number = pr.Number, url = $"https://github.com/o/r/pull/{pr.Number}", state = pr.State, labels = pr.Labels.Select(l => new { name = l }),
+            });
             public List<FakePr> Prs { get; } = new();
 
             public (int, string) Run(string[] args)
@@ -327,15 +354,17 @@ If the email is missing, then the system shall reject the registration.
                 {
                     case ("auth", "status"):
                         return LoggedIn ? (0, "logged in") : (1, "not logged in");
+                    case ("pr", "view"):
+                        var viewed = Prs.Where(p => p.Branch == args[2]).OrderBy(p => p.State == "OPEN" ? 0 : 1).ThenByDescending(p => p.Number).FirstOrDefault();
+                        return viewed == null ? (1, "no pull requests found for branch") : (0, Json(viewed));
                     case ("pr", "list"):
-                        var pr = Prs.LastOrDefault(p => p.Branch == Arg("--head"));
-                        return (0, pr == null ? "[]" : JsonSerializer.Serialize(new[]
-                        {
-                            new { number = pr.Number, url = $"https://github.com/o/r/pull/{pr.Number}", state = pr.State, labels = pr.Labels.Select(l => new { name = l }) },
-                        }));
+                        // The search behind gh pr list lags behind: a new pull request is not in it yet.
+                        var pr = SearchLags ? null : Prs.LastOrDefault(p => p.Branch == Arg("--head"));
+                        return (0, pr == null ? "[]" : "[" + Json(pr) + "]");
                     case ("pr", "create"):
-                        Prs.Add(new FakePr(Prs.Count + 10, Arg("--head"), Arg("--base"), Arg("--title"), Arg("--body")));
-                        return (0, "created");
+                        var created = new FakePr(Prs.Count + 10, Arg("--head"), Arg("--base"), Arg("--title"), Arg("--body"));
+                        Prs.Add(created);
+                        return (0, $"Creating pull request...\nhttps://github.com/o/r/pull/{created.Number}\n");
                     case ("pr", "edit"):
                         Prs.Single(p => p.Number == int.Parse(args[2])).Labels.Add(Arg("--add-label"));
                         return (0, "");
