@@ -34,7 +34,8 @@ namespace SpecTrace.Analyzers
             Diagnostics.SpecFormat,
             Diagnostics.NotConstant,
             Diagnostics.StatementChanged,
-            Diagnostics.CriterionChanged);
+            Diagnostics.CriterionChanged,
+            Diagnostics.ArchitectureViolation);
 
         public override void Initialize(AnalysisContext context)
         {
@@ -55,6 +56,13 @@ namespace SpecTrace.Analyzers
             if (specFiles.IsEmpty) return;
 
             var catalog = SpecFiles.LoadCatalog(specFiles, start.CancellationToken);
+            var architecture = SpecFiles.LoadArchitecture(specFiles, start.CancellationToken);
+            var enforcedRules = architecture.Enforced.ToImmutableArray();
+            if (!enforcedRules.IsEmpty)
+            {
+                // ST0015: code that uses what an architecture rule forbids in its namespace.
+                start.RegisterSemanticModelAction(ctx => ArchitectureCheck.Analyze(ctx, enforcedRules));
+            }
             var texts = specFiles.ToDictionary(f => f.Path, f => f.GetText(start.CancellationToken), StringComparer.Ordinal);
             var options = SpecTraceOptions.From(start.Options.AnalyzerConfigOptionsProvider.GlobalOptions);
 
@@ -137,7 +145,7 @@ namespace SpecTrace.Analyzers
                 // Format issues are only reported in implementation projects, to avoid duplicates.
                 if (!options.IsTestProject)
                 {
-                    foreach (var issue in catalog.Issues)
+                    foreach (var issue in catalog.Issues.Concat(architecture.Issues))
                     {
                         var rule = issue.Kind == SpecIssueKind.DuplicateRequirement || issue.Kind == SpecIssueKind.DuplicateCriterion
                             ? Diagnostics.DuplicateInSpec

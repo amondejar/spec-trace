@@ -50,6 +50,7 @@ namespace SpecTrace.Specs
             var issues = new List<SpecIssue>();
             var start = 0;
             string? specId = null, title = null;
+            var isArchitecture = false;
 
             if (lines.Length > 0 && lines[0].Trim() == "---")
             {
@@ -67,8 +68,12 @@ namespace SpecTrace.Specs
                     var value = m.Groups["value"].Value.Trim().Trim('"', '\'');
                     if (key == "spec" || key == "id") specId = value;
                     else if (key == "title") title = value;
+                    else if (key == "kind") isArchitecture = string.Equals(value, "architecture", StringComparison.OrdinalIgnoreCase);
                 }
             }
+
+            // Architecture rules (ARC-001...) are not requirements: ArchitectureParser reads them.
+            if (isArchitecture) return new SpecDocument(filePath, specId, title, Array.Empty<SpecRequirement>(), Array.Empty<SpecIssue>());
 
             Builder? current = null;
             var inFence = false;

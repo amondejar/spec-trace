@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.9.0-preview.1
+
+### Added
+
+- **Architecture as a spec.** A `*.spec.md` with `kind: architecture` in its front matter holds the project's
+  principles (free text) and rules (`## ARC-n` with `In:`, `Must not use:` and optionally `Use instead:` and `Status:`).
+- ST0015: code in a rule's namespaces that uses a forbidden namespace, type or member (`using`, types, constructors,
+  calls) breaks the build's rules, once per expression and with the alternative in the message. Only approved rules
+  are checked. Rule format issues are reported as ST0008, duplicated rule IDs as ST0007.
+- MCP tool `get_architecture`; `get_requirement` lists the rules; the `implement_requirement` and `review_spec`
+  prompts read the architecture first and check conflicts with it.
+- `dotnet spectrace architecture [--format md|json]` and `dotnet spectrace init --architecture` (a starting point with
+  proposed rules for the root namespace).
+
 ## 0.8.1-preview.1
 
 ### Added

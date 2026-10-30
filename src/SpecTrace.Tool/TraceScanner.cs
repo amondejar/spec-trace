@@ -58,8 +58,11 @@ public sealed record ProjectInfo(string Name, string Directory, string CatalogNa
 
 public sealed record TraceModel(string Root, SpecCatalog Catalog, IReadOnlyList<RequirementTrace> Requirements,
     IReadOnlyList<TraceLink> UnknownLinks, IReadOnlyList<ProjectInfo> Projects, SpecLock? Lock = null,
-    Results.TestResults? TestResults = null, Results.MutationReport? Mutations = null)
+    Results.TestResults? TestResults = null, Results.MutationReport? Mutations = null, ArchitectureSpec? ArchitectureSpec = null)
 {
+    /// <summary>Principles and rules of the architecture specs (kind: architecture); empty if there are none.</summary>
+    public ArchitectureSpec Architecture => ArchitectureSpec ?? SpecTrace.Specs.ArchitectureSpec.Empty;
+
     /// <summary>Mutants in the requirement's code and how many its tests detect, or null without a mutation report.</summary>
     public Results.RequirementMutation? MutationOf(RequirementTrace trace) => Results.MutationAnalysis.For(this, trace);
 
@@ -98,11 +101,15 @@ public static class TraceScanner
     public static TraceModel Scan(SpecTraceConfig config)
     {
         var specsDir = Path.Combine(config.Root, config.Specs);
-        var docs = Directory.Exists(specsDir)
+        var files = Directory.Exists(specsDir)
             ? Directory.EnumerateFiles(specsDir, "*" + SpecParser.FileSuffix, SearchOption.AllDirectories)
-                .Select(f => SpecParser.Parse(Relative(config.Root, f), File.ReadAllText(f)))
-            : Enumerable.Empty<SpecDocument>();
-        var catalog = SpecCatalog.Build(docs);
+                .Select(f => (Path: Relative(config.Root, f), Text: File.ReadAllText(f)))
+                .ToList()
+            : new List<(string Path, string Text)>();
+        var catalog = SpecCatalog.Build(files.Select(f => SpecParser.Parse(f.Path, f.Text)));
+        var architecture = SpecTrace.Specs.ArchitectureSpec.Build(files
+            .Where(f => ArchitectureParser.IsArchitecture(f.Text))
+            .Select(f => ArchitectureParser.Parse(f.Path, f.Text)));
 
         var links = new List<TraceLink>();
         foreach (var source in config.Sources.Select(s => Path.Combine(config.Root, s)).Where(Directory.Exists))
@@ -122,7 +129,7 @@ public static class TraceScanner
             .ToList();
         var unknown = links.Where(l => !catalog.TryGet(l.RequirementId, out _)).ToList();
 
-        return new TraceModel(config.Root, catalog, traces, unknown, FindProjects(config), specLock);
+        return new TraceModel(config.Root, catalog, traces, unknown, FindProjects(config), specLock, ArchitectureSpec: architecture);
     }
 
     public static string LockPath(SpecTraceConfig config) => Path.Combine(config.Root, SpecLock.FileName);

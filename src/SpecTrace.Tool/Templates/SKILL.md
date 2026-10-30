@@ -51,6 +51,13 @@ and do not implement it in the same task:
 The `story_to_spec` MCP prompt contains these steps in detail. `dotnet spectrace story <ref>` does the first step
 from the terminal.
 
+## The architecture
+
+If the project has an architecture spec (`kind: architecture`), read it with `get_architecture` (or
+`dotnet spectrace architecture`) before writing code: put the code in the layer it says and reuse its patterns.
+The build reports **ST0015** when code breaks an approved rule; fix the code, not the rule. If a requirement cannot be
+built within the rules, stop and tell a person.
+
 ## While implementing
 
 - Read the related code first and reuse its types: do not assume properties, setters or constructors.
@@ -103,3 +110,4 @@ code and tests. Show the person the `git diff`.
 | ST0010 | The statement changed after the last review | Review the implementation and tell a person |
 | ST0011 | A criterion changed after the last review | Review its tests and tell a person |
 | ST0012–ST0014 | The requirement is hard to test as written | Ask a person what it means; do not choose for them |
+| ST0015 | Code breaks an architecture rule | Move the code to the right layer or use the alternative in the message |

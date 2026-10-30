@@ -19,3 +19,4 @@ ST0011 | SpecTrace | Warning | SpecTraceAnalyzer
 ST0012 | SpecTrace | Info | SpecTraceAnalyzer
 ST0013 | SpecTrace | Warning | SpecTraceAnalyzer
 ST0014 | SpecTrace | Info | SpecTraceAnalyzer
+ST0015 | SpecTrace | Warning | SpecTraceAnalyzer

@@ -57,6 +57,8 @@ internal static class Cli
                           Prints an MCP prompt (implement_requirement, review_spec, strengthen_tests, story_to_spec) for
                           an agent that runs without MCP prompts, such as a CI job. Without a name it lists them.
           context <ID>    Requirement context for an agent: statement, criteria, status and how to mark the work.
+          architecture    Principles and rules of the architecture specs (kind: architecture), as agents get them.
+                            --format md|json
           scaffold-tests  xUnit skeletons for criteria without tests.
                             --project <dir>    folder of the test project (required)
                             --requirement <ID> only that requirement
@@ -86,6 +88,7 @@ internal static class Cli
                           spectrace.json above, or the root of the git repository.
                             --skills-dir <dir> skills folder (default .claude/skills)
                             --here             set up the current folder even inside another root
+                            --architecture     also specs/architecture.spec.md: principles and rules (proposed) to adapt
                             --agent            also the GitHub Actions workflow in which an agent implements each
                                                approved requirement and opens a pull request for review
 
@@ -191,6 +194,34 @@ internal static class Cli
                     return 0;
                 }
 
+                case "architecture":
+                {
+                    var architecture = TraceScanner.Scan(config).Architecture;
+                    Console.WriteLine(opts.Get("format") switch
+                    {
+                        "json" => System.Text.Json.JsonSerializer.Serialize(new
+                        {
+                            principles = architecture.Principles.Select(p => new { file = p.FilePath, text = p.Text }),
+                            rules = architecture.Rules.Select(r => new
+                            {
+                                id = r.Id,
+                                title = r.Title,
+                                status = r.Status,
+                                enforced = r.IsEnforced,
+                                @in = r.Scope,
+                                mustNotUse = r.Forbidden,
+                                useInstead = r.UseInstead,
+                                rationale = r.Rationale,
+                                spec = $"{r.FilePath}:{r.Line + 1}",
+                            }),
+                            issues = architecture.Issues.Select(i => new { message = i.Message, spec = $"{i.FilePath}:{i.Line + 1}" }),
+                        }, JsonOptions),
+                        "md" or null => architecture.Markdown(),
+                        var other => throw new ArgumentException($"Unknown format '{other}'. Use md or json."),
+                    });
+                    return 0;
+                }
+
                 case "context":
                 {
                     var id = opts.Positional.FirstOrDefault() ?? throw new ArgumentException("Missing requirement ID: dotnet spectrace context ORD-001");
@@ -262,6 +293,7 @@ internal static class Cli
         ["ids"] = new[] { "fix", "base" },
         ["impact"] = new[] { "base", "format" },
         ["context"] = Array.Empty<string>(),
+        ["architecture"] = new[] { "format" },
         ["pending"] = new[] { "since", "requirement", "format" },
         ["prompt"] = Array.Empty<string>(),
         ["scaffold-tests"] = new[] { "project", "requirement", "namespace" },
@@ -269,7 +301,7 @@ internal static class Cli
         ["stories"] = new[] { "label", "state", "unspecified", "fail-on-unspecified", "format" },
         ["mcp"] = Array.Empty<string>(),
         ["import"] = new[] { "prefix", "out", "status", "dry-run" },
-        ["init"] = new[] { "skills-dir", "here", "agent" },
+        ["init"] = new[] { "skills-dir", "here", "agent", "architecture" },
     };
 
     /// <summary>
@@ -412,6 +444,16 @@ internal static class Cli
             created.Add(existing == null ? ".gitattributes" : ".gitattributes (spectrace.lock merge=union)");
         }
 
+        if (opts.Has("architecture"))
+        {
+            var specsFolder = SpecTraceConfig.Load(root).Specs;
+            var hasArchitecture = Directory.Exists(Path.Combine(root, specsFolder)) && Directory
+                .EnumerateFiles(Path.Combine(root, specsFolder), "*" + SpecTrace.Specs.SpecParser.FileSuffix, SearchOption.AllDirectories)
+                .Any(f => SpecTrace.Specs.ArchitectureParser.IsArchitecture(File.ReadAllText(f)));
+            if (hasArchitecture) Console.WriteLine("There is already an architecture spec (kind: architecture): not creating another one.");
+            else Create(Path.Combine(specsFolder, "architecture.spec.md"), Template("architecture.spec.md").Replace("{{root}}", RootNamespace(root)));
+        }
+
         if (opts.Has("agent"))
         {
             var workflow = Path.Combine(".github", "workflows", AgentWorkflow.FileName);
@@ -432,6 +474,17 @@ internal static class Cli
         }
 
         return 0;
+    }
+
+    /// <summary>
+    /// The application's root namespace for the architecture example: the first segment of the first project that is not a
+    /// test project (Shop.Api → Shop), or "MyApp".
+    /// </summary>
+    private static string RootNamespace(string root)
+    {
+        var projects = TraceScanner.FindProjects(SpecTraceConfig.Load(root)).Where(p => !p.IsTest).OrderBy(p => p.Directory, StringComparer.Ordinal);
+        var name = projects.Select(p => p.Name).FirstOrDefault();
+        return string.IsNullOrEmpty(name) ? "MyApp" : name!.Split('.')[0];
     }
 
     /// <summary>

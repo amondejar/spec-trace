@@ -88,8 +88,12 @@ namespace SpecTrace.Tests
             params MetadataReference[] extraReferences) =>
             RunCore(source, spec, lockText, isTestProject, assemblyName, rootNamespace, extraReferences);
 
+        /// <summary>Like <see cref="Run"/>, with an architecture spec (kind: architecture) next to the requirements.</summary>
+        public static Result RunWithArchitecture(string source, string spec, string architecture, bool isTestProject = false) =>
+            RunCore(source, spec, null, isTestProject, "App", "App", Array.Empty<MetadataReference>(), architecture);
+
         private static Result RunCore(string source, string spec, string? lockText, bool isTestProject,
-            string assemblyName, string rootNamespace, MetadataReference[] extraReferences)
+            string assemblyName, string rootNamespace, MetadataReference[] extraReferences, string? architecture = null)
         {
             var tree = CSharpSyntaxTree.ParseText(source, new CSharpParseOptions(LanguageVersion.Latest), path: "Code.cs");
             var compilation = CSharpCompilation.Create(assemblyName, new[] { tree },
@@ -99,6 +103,7 @@ namespace SpecTrace.Tests
             var additional = lockText == null
                 ? ImmutableArray.Create<AdditionalText>(new InMemoryText("/repo/specs/test.spec.md", spec))
                 : ImmutableArray.Create<AdditionalText>(new InMemoryText("/repo/specs/test.spec.md", spec), new InMemoryText("/repo/spectrace.lock", lockText));
+            if (architecture != null) additional = additional.Add(new InMemoryText("/repo/specs/architecture.spec.md", architecture));
             var options = new OptionsProvider(new Dictionary<string, string>
             {
                 ["build_property.RootNamespace"] = rootNamespace,

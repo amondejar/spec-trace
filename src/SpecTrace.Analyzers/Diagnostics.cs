@@ -24,6 +24,7 @@ namespace SpecTrace.Analyzers
         public const string NotConstant = "ST0009";
         public const string StatementChanged = "ST0010";
         public const string CriterionChanged = "ST0011";
+        public const string ArchitectureViolation = "ST0015";
     }
 
     internal static class Diagnostics
@@ -101,6 +102,11 @@ namespace SpecTrace.Analyzers
             "Acceptance criterion without an outcome",
             "{0}",
             DiagnosticSeverity.Info, compilationEnd: true);
+
+        public static readonly DiagnosticDescriptor ArchitectureViolation = Rule("ST0015",
+            "Architecture rule broken",
+            "{0} ({1}): code in {2} must not use {3}{4}",
+            DiagnosticSeverity.Warning);
 
         public static readonly DiagnosticDescriptor NotConstant = Rule("ST0009",
             "Requirement ID is not a constant",

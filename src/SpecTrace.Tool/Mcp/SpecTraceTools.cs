@@ -42,6 +42,12 @@ public sealed class SpecTraceTools
                 Schema(new[] { "id" }, ("id", Str("Requirement ID, for example ORD-002."))),
                 readOnly: true), GetRequirement),
 
+            ["get_architecture"] = (Define("get_architecture", "Project architecture",
+                "Returns the architecture of the project: its principles (layers, patterns, conventions) and the rules the build checks " +
+                "(ST0015: code in some namespaces must not use some namespaces, types or members). Read it before writing code, " +
+                "and before reviewing a spec, so the change fits the existing design.",
+                Schema(), readOnly: true), GetArchitecture),
+
             ["get_code"] = (Define("get_code", "Read repository code",
                 "Returns the contents of code files so a change can use the real types instead of guessing them. " +
                 "Give exactly one of: requirement_id (the files that implement and test the requirement or, if it has none yet, " +
@@ -167,6 +173,8 @@ public sealed class SpecTraceTools
         result["structuredContent"] = structured;
         return result;
     }
+
+    private JsonObject GetArchitecture(JsonObject args) => Text(TraceScanner.Scan(_config).Architecture.Markdown());
 
     private JsonObject GetRequirement(JsonObject args)
     {

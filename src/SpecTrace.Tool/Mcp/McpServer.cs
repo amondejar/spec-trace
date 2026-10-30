@@ -155,6 +155,7 @@ public sealed class McpServer
                 "SpecTrace provides Spec-Driven Development traceability in this .NET repository. " +
                 "Before implementing, call get_requirement with the requirement ID; if it does not exist, propose it with propose_requirement. " +
                 "Before writing code, read the related files with get_code and reuse their types; do not guess them. " +
+                "Follow the project's architecture (get_architecture): the build reports ST0015 when code breaks one of its rules. " +
                 "Mark the code with [Implements(Requirements.ID)] and each test with [Verifies(Requirements.ID, AcceptanceCriteria.ID.AC_n)]. " +
                 "The work is done when list_requirements with only_gaps=true no longer returns that requirement. " +
                 "If a requirement has unreviewed spec changes (only_changed=true), review its code and tests and tell a person; " +

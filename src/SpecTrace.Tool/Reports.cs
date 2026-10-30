@@ -498,6 +498,7 @@ public static class Reports
         else sb.AppendLine("- None yet.");
         sb.AppendLine();
         AppendCodeContext(sb, model, t);
+        AppendArchitecture(sb, model);
         sb.AppendLine("## How to mark the work");
         sb.AppendLine();
         sb.AppendLine($"- On the code that implements it: `[Implements(Requirements.{r.Identifier})]`");
@@ -508,6 +509,24 @@ public static class Reports
 
         sb.AppendLine("- Check with `dotnet build`: no ST0003/ST0004/ST0005 should remain for this requirement.");
         return sb.ToString();
+    }
+
+    /// <summary>The architecture rules the code must follow, in short; get_architecture has the principles in full.</summary>
+    private static void AppendArchitecture(StringBuilder sb, TraceModel model)
+    {
+        var architecture = model.Architecture;
+        if (architecture.IsEmpty) return;
+        sb.AppendLine("## Architecture");
+        sb.AppendLine();
+        sb.AppendLine("Follow the project's architecture (get_architecture has the principles in full). The build reports ST0015 when code breaks an approved rule:");
+        foreach (var rule in architecture.Rules)
+        {
+            sb.AppendLine($"- {rule.Id} {rule.Title}{(rule.IsEnforced ? "" : $" ({rule.Status})")}: code in {string.Join(", ", rule.Scope)} " +
+                          $"must not use {string.Join(", ", rule.Forbidden)}" + (rule.UseInstead != null ? $"; use {rule.UseInstead}" : "") + ".");
+        }
+
+        if (architecture.Rules.Count == 0) sb.AppendLine("- (principles only, no rules)");
+        sb.AppendLine();
     }
 
     /// <summary>Files that already work with requirements of the same spec, with the IDs they implement or verify.</summary>

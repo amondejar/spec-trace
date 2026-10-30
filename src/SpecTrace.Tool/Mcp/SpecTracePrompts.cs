@@ -128,6 +128,8 @@ public static class SpecTracePrompts
              over), permissions (another user), empty input, what happens at the same time from two places.
            - Conflicts with other requirements: a rule that changes or bypasses an existing one (opening hours, capacity,
              who can cancel...).
+           - Conflicts with the architecture (get_architecture): a requirement that forces a layer to depend on another the
+             rules forbid, or that cannot be built with the project's principles.
            - Criteria that cannot be tested by a single test, or that test the implementation instead of the behaviour.
         3. For each finding give: where (ID and AC), what is wrong in one sentence, and a proposed rewrite of the
            statement or the criterion, or the question someone has to answer.
@@ -155,8 +157,9 @@ public static class SpecTracePrompts
     private static string Implement(string id) => $"""
         Implement requirement {id} in this repository.
 
-        1. Call get_requirement ({id}) and read the related code with get_code before writing anything; reuse the existing
-           types, constructors and members instead of guessing them.
+        1. Call get_requirement ({id}) and get_architecture, and read the related code with get_code before writing anything;
+           reuse the existing types, constructors and members instead of guessing them, and put the code in the layer the
+           architecture says. The build reports ST0015 when code breaks an architecture rule.
         2. Mark the code that implements it with [Implements(Requirements.<ID with underscores>)] and write one test per
            acceptance criterion with [Verifies(Requirements.<ID>, AcceptanceCriteria.<ID>.AC_n)]. A skipped test does not count.
         3. Do not change the text of the requirement to fit the code. If the spec is ambiguous or wrong, stop and say so.

@@ -59,7 +59,7 @@ the closest valid one suggested.
 | --- | --- |
 | `SpecTrace` | Roslyn analyzer + source generator, IDE code fixes and MSBuild props/targets. Brings in `SpecTrace.Abstractions`. |
 | `SpecTrace.Abstractions` | The `[Implements]` and `[Verifies]` attributes. |
-| `SpecTrace.Tool` | The `dotnet spectrace` CLI: `report`, `pending`, `impact`, `context`, `prompt`, `lock`, `ids`, `scaffold-tests`, `story`, `stories`, `import`, `mcp`, `init`. |
+| `SpecTrace.Tool` | The `dotnet spectrace` CLI: `report`, `pending`, `impact`, `context`, `architecture`, `prompt`, `lock`, `ids`, `scaffold-tests`, `story`, `stories`, `import`, `mcp`, `init`. |
 
 ## Getting started
 
@@ -127,6 +127,7 @@ it in the IDE tooltip. Blockquotes (`> ...`) are notes for people and are not pa
 | [ST0012](https://github.com/amondejar/spec-trace/blob/main/docs/rules/ST0012.md) | Info | The statement does not say what the system *shall* do (EARS) |
 | [ST0013](https://github.com/amondejar/spec-trace/blob/main/docs/rules/ST0013.md) | Warning | Vague term that cannot be tested as written ("fast", "user-friendly", "etc.", "rápido"...) |
 | [ST0014](https://github.com/amondejar/spec-trace/blob/main/docs/rules/ST0014.md) | Info | Acceptance criterion without an observable outcome (*then* ...) |
+| [ST0015](https://github.com/amondejar/spec-trace/blob/main/docs/rules/ST0015.md) | Warning | Code breaks an approved architecture rule (a layer uses what it must not) |
 
 Tests marked `Skip` or `[Ignore]` do not count as coverage.
 
@@ -134,6 +135,49 @@ ST0012–ST0014 check how requirements are written, before anyone builds them: a
 hide a number or a decision, criteria without an expected result. They run on `proposed` requirements too, because
 that is when fixing the text is cheap. Contradictions between the statement and the criteria need a reader: the
 `review_spec` MCP prompt asks an agent to review a requirement or a whole spec before it is approved.
+
+## Architecture
+
+Requirements say *what* the system does; the architecture says *how* it is built: layers, allowed dependencies,
+patterns. With SpecTrace it is a spec too, in the specs folder, with `kind: architecture` in its front matter:
+
+```markdown
+---
+spec: ARC
+title: Architecture
+kind: architecture
+---
+# Architecture
+
+Minimal API. Business rules live in the domain; endpoints only translate HTTP.
+
+## ARC-001: The domain does not depend on the web
+In: RoomBooking.Domain
+Must not use: Microsoft.AspNetCore, RoomBooking.Endpoints
+
+## ARC-002: Time is injected
+In: RoomBooking.Domain
+Must not use: System.DateTime.Now, System.DateTime.UtcNow, System.DateTimeOffset.Now
+Use instead: TimeProvider
+
+## ARC-003: Endpoints go through the domain services
+Status: proposed
+In: RoomBooking.Endpoints
+Must not use: RoomBooking.Infrastructure
+```
+
+- **Principles** (any text outside the rules) are guidance: agents get them with the `get_architecture` MCP tool, in
+  `get_requirement` and in the `implement_requirement` and `review_spec` prompts, so new code follows the existing
+  design instead of inventing one.
+- **Rules** (`## ARC-n`) are checked on every build: code in the `In:` namespaces that uses a forbidden namespace,
+  type or member (in a `using`, a type, a call) gets [ST0015](https://github.com/amondejar/spec-trace/blob/main/docs/rules/ST0015.md),
+  in the IDE, in CI and on the agent's pull request. Only approved rules are checked; `proposed` ones are shown to agents.
+- `dotnet spectrace init --architecture` creates a starting point with proposed rules for your root namespace;
+  `dotnet spectrace architecture` prints what agents receive.
+
+Rules are matched by full names and whole segments (`RoomBooking.Domain` covers `RoomBooking.Domain.Rooms`, not
+`RoomBooking.DomainEvents`). They describe dependencies the compiler can see; patterns that need judgement belong in the
+principles, for people and for `review_spec`.
 
 ## Spec changes (spectrace.lock)
 
@@ -182,7 +226,7 @@ jobs:
         with:
           dotnet-version: 8.0.x
       - run: dotnet test --logger trx --results-directory TestResults
-      - uses: amondejar/spec-trace@v0.8.1
+      - uses: amondejar/spec-trace@v0.9.0
         if: always()                 # also when tests fail: the report says which criteria broke
         with:
           root: .                    # folder containing spectrace.json
@@ -296,6 +340,7 @@ external dependencies:
 | --- | --- | --- |
 | `list_requirements` | read | Requirements with their traceability status; `only_gaps` for what is missing, `only_changed` for unreviewed spec changes |
 | `get_requirement` | read | Statement, criteria with status, current implementation, target project and `using`, related files and the exact attributes to use |
+| `get_architecture` | read | The project's architecture: principles and the rules the build checks (ST0015) |
 | `get_code` | read | Code related to a requirement, where a type is declared, or a given file (only `.cs`, `.csproj` and `.md` under the code and spec folders) |
 | `get_traceability_report` | read | Full report in Markdown or JSON |
 | `scaffold_tests` | write | Test skeletons for criteria without tests (never overwrites) |

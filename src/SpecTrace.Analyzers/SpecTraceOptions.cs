@@ -54,6 +54,12 @@ namespace SpecTrace.Analyzers
         public static SpecDocument Parse(AdditionalText text, CancellationToken ct) =>
             SpecParser.Parse(text.Path, text.GetText(ct)?.ToString() ?? string.Empty);
 
+        public static ArchitectureSpec LoadArchitecture(ImmutableArray<AdditionalText> files, CancellationToken ct) =>
+            ArchitectureSpec.Build(files.Where(IsSpec)
+                .Select(f => (f.Path, Text: f.GetText(ct)?.ToString() ?? string.Empty))
+                .Where(f => ArchitectureParser.IsArchitecture(f.Text))
+                .Select(f => ArchitectureParser.Parse(f.Path, f.Text)));
+
         public static SpecCatalog LoadCatalog(ImmutableArray<AdditionalText> files, CancellationToken ct) =>
             SpecCatalog.Build(files.Where(IsSpec).Select(f => Parse(f, ct)));
     }

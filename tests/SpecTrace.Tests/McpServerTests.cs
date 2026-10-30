@@ -97,7 +97,8 @@ public class OrderTests
             var tools = (JsonArray)Send("{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/list\"}")["result"]!["tools"]!;
 
             var readOnly = tools.ToDictionary(t => t!["name"]!.GetValue<string>(), t => t!["annotations"]!["readOnlyHint"]!.GetValue<bool>());
-            Assert.Equal(8, readOnly.Count);
+            Assert.Equal(9, readOnly.Count);
+            Assert.True(readOnly["get_architecture"]);
             Assert.True(readOnly["get_requirement"]);
             Assert.True(readOnly["get_story"]);
             Assert.True(readOnly["list_stories"]);
